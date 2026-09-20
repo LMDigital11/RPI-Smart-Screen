@@ -1,0 +1,6 @@
+pi-gen/stage-smarter/02-app/files/
+backend/config.json
+/config.json
+__pycache__/
+*.pyc
+.DS_Store

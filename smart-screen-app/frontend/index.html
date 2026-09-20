@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Smart Screen</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+
+  <section id="screen-main" class="screen active">
+    <div class="photo-layer"><img id="photo-a" alt=""><img id="photo-b" alt=""></div>
+    <div class="scanline"></div>
+
+    <div class="topbar">
+      <div class="topbar-brand">
+        <span id="ha-dot" class="dot" title="Home Assistant"></span>
+        <span id="immich-dot" class="dot" title="Photos"></span>
+        <span id="wifi-dot" class="dot" title="WiFi"></span>
+      </div>
+      <button id="btn-settings" class="icon-btn" aria-label="Settings">
+        <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.48.48 0 0 0-.48-.41h-3.84a.48.48 0 0 0-.48.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.49.49 0 0 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.48-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61l-2.01-1.58zM12 15.6A3.61 3.61 0 0 1 8.4 12 3.61 3.61 0 0 1 12 8.4a3.61 3.61 0 0 1 3.6 3.6 3.61 3.61 0 0 1-3.6 3.6z"/></svg>
+      </button>
+    </div>
+
+    <div class="bottom-info">
+      <div id="weather-pill" class="pill hidden">
+        <span id="pill-temp">--°</span>
+        <span id="pill-condition"></span>
+      </div>
+      <div class="clock">
+        <div id="time" class="time">--:--</div>
+        <div id="date" class="date"></div>
+      </div>
+      <div id="swipe-hint" class="swipe-hint">
+        <svg viewBox="0 0 24 24"><path d="M12 5.5l-5 5h4V17h2v-6.5h4l-5-5z"/></svg>
+        <span>Smart home</span>
+      </div>
+    </div>
+
+    <div id="weather-card" class="weather-card hidden">
+      <div class="wc-top">
+        <span id="wc-condition-label" class="wc-label"></span>
+        <span class="wc-icon" id="wc-icon"></span>
+      </div>
+      <div class="wc-temp-row">
+        <span id="wc-temp" class="wc-temp">--°</span>
+        <div class="wc-details">
+          <span id="wc-highlow"></span>
+          <span id="wc-extra"></span>
+        </div>
+      </div>
+      <div class="wc-bottom">
+        <span id="wc-sun"></span>
+        <span id="wc-location"></span>
+      </div>
+    </div>
+  </section>
+
+  <section id="screen-hass" class="screen">
+    <div class="sheet-header">
+      <div class="grabber"></div>
+      <h2>Smart home</h2>
+      <div class="sheet-actions">
+        <button id="btn-hass-close" class="icon-btn">
+          <svg viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </div>
+    </div>
+    <div id="hass-native" class="hass-native"></div>
+    <div id="hass-embed-wrap" class="hidden">
+      <iframe id="hass-iframe"></iframe>
+    </div>
+  </section>
+
+  <section id="screen-settings" class="screen">
+    <div class="sheet-header">
+      <h2>Settings</h2>
+      <button id="btn-settings-close" class="icon-btn">
+        <svg viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+      </button>
+    </div>
+    <div id="settings-body" class="scroll">
+      <div id="settings-nav" class="settings-nav"></div>
+      <div id="settings-content" class="settings-content"></div>
+    </div>
+  </section>
+
+  <section id="screen-setup" class="screen">
+    <div class="wizard">
+      <div class="wizard-head">
+        <div id="wizard-step" class="wizard-step">1 / 6</div>
+        <h1 id="wizard-title">Welcome</h1>
+        <p id="wizard-subtitle"></p>
+      </div>
+      <div id="wizard-body" class="wizard-body"></div>
+      <div class="wizard-nav">
+        <button id="wizard-back" class="btn ghost hidden">Back</button>
+        <button id="wizard-next" class="btn primary">Continue</button>
+      </div>
+    </div>
+  </section>
+
+  <div id="toast" class="toast hidden"></div>
+</div>
+
+<script src="js/api.js"></script>
+<script src="js/gestures.js"></script>
+<script src="js/clock.js"></script>
+<script src="js/slideshow.js"></script>
+<script src="js/weather.js"></script>
+<script src="js/sleep.js"></script>
+<script src="js/hass.js"></script>
+<script src="js/settings.js"></script>
+<script src="js/setup.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+#!/bin/bash
+# Openbox autostart — boots straight into the Smart Screen kiosk.
+xset s off -dpms
+xset -dpms
+unclutter -idle 0.5 &
+
+/usr/bin/chromium \
+  --kiosk \
+  --noerrdialogs \
+  --disable-infobars \
+  --disable-session-crashed-bubble \
+  --disable-translate \
+  --disable-features=TranslateUI \
+  --check-for-update-interval=31536000 \
+  --overscroll-history-navigation-disabled \
+  --no-first-run \
+  --touch-events=enabled \
+  http://127.0.0.1:8080 &
+
+# Bring pulseaudio up for Bluetooth/AUX.
+pulseaudio --start --exit-idle-time=-1 2>/dev/null || true
+exit 0

@@ -1,0 +1,31 @@
+#!/bin/bash
+# Smart Screen updater — run as root (via sudoers), arguments: <repo_url> <branch>
+# Pulls the latest app from a git repo into /opt/smart-screen and restarts the
+# service. /etc/smart-screen (user settings) is never touched.
+set -euo pipefail
+
+REPO_DIR=/opt/smart-screen-src
+APP_DIR=/opt/smart-screen
+URL="$1"
+BRANCH="${2:-main}"
+APP_USER="${SUDO_USER:-pi}"
+
+if [ ! -d "$REPO_DIR/.git" ]; then
+  git clone --depth 1 -b "$BRANCH" "$URL" "$REPO_DIR"
+else
+  git -C "$REPO_DIR" fetch --depth 1 origin "$BRANCH"
+  git -C "$REPO_DIR" checkout -f "origin/$BRANCH"
+fi
+
+rsync -a --delete "$REPO_DIR/smart-screen-app/" "$APP_DIR/"
+chown -R "$APP_USER:$APP_USER" "$APP_DIR"
+chown -R "$APP_USER:$APP_USER" /etc/smart-screen 2>/dev/null || true
+
+python3 "$APP_DIR/backend/gen_sound.py"
+python3 -m pip install --break-system-packages -r "$APP_DIR/backend/requirements.txt" >/dev/null 2>&1 || true
+
+systemctl daemon-reload
+( sleep 2 && systemctl restart smart-screen.service ) >/dev/null 2>&1 &
+
+NEW_SHA=$(git -C "$REPO_DIR" rev-parse --short HEAD 2>/dev/null || true)
+echo "updated to ${NEW_SHA:-unknown}"

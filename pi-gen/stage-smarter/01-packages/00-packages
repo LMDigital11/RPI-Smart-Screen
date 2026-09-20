@@ -1,0 +1,44 @@
+# Smart Screen stage packages — installed on top of Raspberry Pi OS Lite.
+# One package per line. Installed with --no-install-recommends? (see 01-packages-nr)
+
+# --- Kiosk (Chromium fullscreen over X on Openbox) ---
+chromium
+xserver-xorg
+xinit
+openbox
+lightdm
+unclutter
+x11-xserver-utils
+
+# --- App backend (Python + media) ---
+python3
+python3-flask
+python3-requests
+python3-urllib3
+python3-paho-mqtt
+
+# --- Photo slideshow local files ---
+imagemagick
+
+# --- Audio through the 3.5mm jack ---
+alsa-utils
+pulseaudio
+pulseaudio-module-bluetooth
+
+# --- Bluetooth A2DP sink (used as a speaker) ---
+bluez
+bluez-tools
+
+# --- USB stick support (mount/unmount via udisksctl) ---
+udisks2
+usbutils
+
+# --- WiFi from the setup wizard (nmcli) ---
+network-manager
+
+# --- Screensaver/backlight tools ---
+raspi-config
+
+# --- Over-the-air app updates (pull from a git repo) ---
+git
+rsync

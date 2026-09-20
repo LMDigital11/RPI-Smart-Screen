@@ -1,0 +1,9 @@
+polkit.addRule(function (action, subject) {
+    if (
+        subject.user === "pi" &&
+        (action.id.indexOf("org.freedesktop.udisks2.") === 0 ||
+         action.id.indexOf("org.freedesktop.display1.set-reset") === 0)
+    ) {
+        return polkit.Result.YES;
+    }
+});

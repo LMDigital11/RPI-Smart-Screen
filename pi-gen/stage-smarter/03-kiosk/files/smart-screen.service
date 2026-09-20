@@ -1,0 +1,18 @@
+[Unit]
+Description=Smart Screen backend (Immich, weather, Home Assistant, audio, display)
+After=network-online.target sound.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/smart-screen/backend/main.py
+WorkingDirectory=/opt/smart-screen/backend
+Restart=always
+RestartSec=3
+User=pi
+Environment=SMART_SCREEN_CONFIG=/etc/smart-screen/config.json
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

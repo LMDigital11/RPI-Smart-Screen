@@ -1,0 +1,37 @@
+# pi-gen configuration for the Smart Screen OS image.
+# Copy this file to your pi-gen checkout as `config`, or put it at `pi-gen/config`.
+
+# Name given to the produced image: smart-screen-<date>.img
+IMG_NAME="smart-screen"
+
+# 64-bit Raspberry Pi OS "Lite" as the base (right for a Pi 4)
+RELEASE="bookworm"
+ARCH=arm64
+
+# Skip the desktop stages — we run our own kiosk on top of Lite.
+# stage-smarter is the symlink/copy of this repo's pi-gen/stage-smarter.
+STAGE_LIST="stage0 stage1 stage2 stage-smarter"
+
+# Compress the final image.
+DEPLOY_COMPRESSION="zip"
+
+# User that will own /opt/smart-screen and autologin to the kiosk.
+FIRST_USER_NAME=pi
+FIRST_USER_PASS=smart
+
+# Pre-seed WiFi during the build (optional). Leave commented to force
+# the on-screen first-boot setup wizard to walk the user through it.
+#WPA_COUNTRY=GB
+#WPA_SSID="MyHomeWifi"
+#WPA_PASSPHRASE="changeme"
+
+# Keyboard / locale for the on-screen keyboard behaviour.
+KEYBOARD_KEYMAP=gb
+KEYBOARD_LAYOUT="English (UK)"
+
+# Disable the first-boot cache growth tuning GUI asks.
+ENABLE_SSH=0
+DISABLE_FIRST_BOOT_USER_RENAME=0
+
+# Make the touch UI snappier.
+USE_QEMU=0

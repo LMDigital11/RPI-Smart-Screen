@@ -1,0 +1,2 @@
+# Smart Screen: let the app user run the pinned updater script as root.
+pi ALL=(root) NOPASSWD: /usr/local/sbin/smart-screen-update

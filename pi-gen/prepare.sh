@@ -20,6 +20,11 @@ cp -r "$SRC/." "$DST/"
 
 find "$DST" -name '.gitkeep' -delete 2>/dev/null || true
 
+# Files created on Windows/network shares loose their exec bit. pi-gen requires
+# prerun.sh and 00-run.sh to be executable or it silently skips them.
+chmod +x "$(pwd)/stage-smarter/prerun.sh"
+find "$(pwd)/stage-smarter" -name '*.sh' -exec chmod +x {} + 2>/dev/null || true
+
 # Stamp the build with the source commit so the updater can detect newer
 # versions. Falls back to the checked-in VERSION file outside a git checkout.
 GIT_SHA=$(git -C "$(pwd)/.." rev-parse --short HEAD 2>/dev/null || true)

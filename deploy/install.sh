@@ -1,14 +1,21 @@
 #!/usr/bin/env bash
-# In-place installer for testing the Smart Screen on a Pi that already runs
-# Raspberry Pi OS (Desktop recommended). Copies the app, wires the kiosk,
-# and enables services. Reverse of the pi-gen build — same end result.
+# Smart Screen installer for Raspberry Pi OS.
 #
-# Usage (on the Pi, as root):
-#   sudo bash deploy/install.sh [mountpoint]
+# Designed to be the fast path (no .img building): flash stock Raspberry Pi OS
+# (64-bit Desktop or Lite — Desktop is easiest) onto an SD card, boot the Pi
+# once, then:
 #
-# The app source is read from ../smart-screen-app relative to this repo.
+#     git clone <your repo URL> smart-screen
+#     cd smart-screen
+#     sudo bash deploy/install.sh
+#     sudo reboot
+#
+# After reboot the Pi autologins into a Chromium kiosk showing the app, and the
+# first-boot setup wizard appears on the touchscreen. Fully idempotent — safe
+# to re-run to refresh the app or re-wire services.
 
 set -euo pipefail
+
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 APP_SRC="$REPO_DIR/smart-screen-app"
 DEST=/opt/smart-screen
@@ -19,11 +26,24 @@ if [ "$(id -u)" != "0" ]; then
   exit 1
 fi
 
-echo "==> Installing packages"
+if [ ! -d "$APP_SRC/backend" ]; then
+  echo "error: $APP_SRC/backend not found (run this from inside the cloned repo)" >&2
+  exit 1
+fi
+
+if grep -qi "raspberry pi" /proc/device-tree/model 2>/dev/null; then
+  echo "Detected a Raspberry Pi. Good."
+else
+  echo "warning: this machine does not look like a Raspberry Pi."
+  echo "The kiosk/touchscreen parts are Pi-specific; continuing anyway."
+fi
+
+echo "==> Installing packages (this can take a few minutes)"
 apt-get update
 DEBIAN_FRONTEND=noninteractive apt-get install -y \
   chromium \
   xserver-xorg \
+  xinit \
   openbox \
   lightdm \
   unclutter \
@@ -31,26 +51,35 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y \
   python3 \
   python3-flask \
   python3-requests \
+  python3-urllib3 \
   python3-paho-mqtt \
+  imagemagick \
   udisks2 \
+  usbutils \
   alsa-utils \
   pulseaudio \
   pulseaudio-module-bluetooth \
   bluez \
   bluez-tools \
   network-manager \
+  raspi-config \
   git \
   rsync
 
 echo "==> Copying app to $DEST"
 install -d "$DEST"
-cp -r "$APP_SRC/." "$DEST/"
+rsync -a --delete "$APP_SRC/" "$DEST/"
 chmod 755 "$DEST/backend/main.py" 2>/dev/null || true
 
+echo "==> Generating alarm sound"
 python3 "$DEST/backend/gen_sound.py"
 
-echo "==> Config directory for $BOOT_USER"
+echo "==> Config directory + default config for $BOOT_USER"
 install -d -o "$BOOT_USER" -g "$BOOT_USER" /etc/smart-screen
+if [ ! -f /etc/smart-screen/config.json ]; then
+  printf '{}\n' > /etc/smart-screen/config.json
+fi
+chown "$BOOT_USER":"$BOOT_USER" /etc/smart-screen/config.json
 
 echo "==> OTA updater (pull from a git repo)"
 cat > /usr/local/sbin/smart-screen-update <<'UPEOF'
@@ -83,6 +112,7 @@ printf '%s\n' \
   "$BOOT_USER ALL=(root) NOPASSWD: /usr/local/sbin/smart-screen-update" \
   > /etc/sudoers.d/50-smart-screen
 chmod 440 /etc/sudoers.d/50-smart-screen
+visudo -c -f /etc/sudoers.d/50-smart-screen >/dev/null 2>&1 || true
 
 echo "==> Backend service"
 cat > /etc/systemd/system/smart-screen.service <<EOF
@@ -115,6 +145,8 @@ autologin-user=$BOOT_USER
 autologin-session=openbox
 autologin-user-timeout=0
 EOF
+systemctl enable lightdm.service
+systemctl set-default graphical.target
 
 mkdir -p "/home/$BOOT_USER/.config/openbox"
 cat > "/home/$BOOT_USER/.config/openbox/autostart" <<EOF
@@ -131,21 +163,67 @@ EOF
 chmod 755 "/home/$BOOT_USER/.config/openbox/autostart"
 chown -R "$BOOT_USER":"$BOOT_USER" "/home/$BOOT_USER/.config"
 
-echo "==> Analogue (AUX) audio + splash"
-CONFIG_TXT=/boot/firmware/config.txt
-[ -f "$CONFIG_TXT" ] || CONFIG_TXT=/boot/config.txt
-grep -q '^dtparam=audio=on' "$CONFIG_TXT" || {
-  printf '\n# Smart Screen\ndtparam=audio=on\ndtoverlay=disable-hdmi-audio\n' >> "$CONFIG_TXT"
-}
-raspi-config nonint do_boot_splash 1 2>/dev/null || true
+echo "==> Polkit: allow USB mounting + display power for $BOOT_USER"
+mkdir -p /etc/polkit-1/rules.d
+cat > /etc/polkit-1/rules.d/50-smart-screen.rules <<EOF
+polkit.addRule(function (action, subject) {
+    if (
+        subject.user === "$BOOT_USER" &&
+        (action.id.indexOf("org.freedesktop.udisks2.") === 0 ||
+         action.id.indexOf("org.freedesktop.display1.set-reset") === 0)
+    ) {
+        return polkit.Result.YES;
+    }
+});
+EOF
 
-echo "==> Bluetooth A2DP speaker"
+echo "==> Bluetooth: A2DP speaker mode + pair helper"
 systemctl enable bluetooth.service 2>/dev/null || true
 mkdir -p /etc/pulse
 if ! grep -q module-bluetooth-discover /etc/pulse/default.pa 2>/dev/null; then
   printf '\nload-module module-bluetooth-policy\nload-module module-bluetooth-discover\n' >> /etc/pulse/default.pa
 fi
+cat > /usr/local/sbin/smart-bt.sh <<'BTEOF'
+#!/bin/bash
+# Make the Pi discoverable as a Bluetooth speaker ~10 min (like "pair me").
+bluetoothctl power on >/dev/null 2>&1
+bluetoothctl discoverable on >/dev/null 2>&1
+sleep 600
+bluetoothctl discoverable off >/dev/null 2>&1
+BTEOF
+chmod 755 /usr/local/sbin/smart-bt.sh
+
+echo "==> Boot tweaks: AUX audio, splash off, quicker boot"
+CONFIG_TXT=/boot/firmware/config.txt
+[ -f "$CONFIG_TXT" ] || CONFIG_TXT=/boot/config.txt
+append_cfg() {
+  grep -qF "$1" "$CONFIG_TXT" || printf '%s\n' "$1" >> "$CONFIG_TXT"
+}
+if [ "$(stat -c %U "$CONFIG_TXT" 2>/dev/null)" = "root" ]; then
+  append_cfg ""
+  append_cfg "# --- Smart Screen ---"
+  append_cfg "disable_splash=1"
+  append_cfg "boot_delay=0"
+  append_cfg "dtparam=audio=on"
+  append_cfg "dtoverlay=disable-hdmi-audio"
+else
+  # Some images mount this FAT partition with a non-root owner; fall back to tee.
+  printf '\n# --- Smart Screen ---\ndisable_splash=1\nboot_delay=0\ndtparam=audio=on\ndtoverlay=disable-hdmi-audio\n' | tee -a "$CONFIG_TXT" >/dev/null
+fi
+
+echo "==> raspi-config: nothing blocks first boot"
+raspi-config nonint do_boot_splash 1 2>/dev/null || true
+raspi-config nonint do_expand_rootfs 2>/dev/null || true
 
 echo
-echo "Installed. Reboot now: sudo reboot"
-echo "On first boot the setup wizard will appear on the touchscreen."
+echo "============================================="
+echo " Smart Screen installed."
+echo " Reboot now: sudo reboot"
+echo
+echo " On next boot the setup wizard appears on the touchscreen:"
+echo "   - connect WiFi"
+echo "   - Immich server + API key"
+echo "   - weather location"
+echo "   - Home Assistant URL + long-lived token"
+echo " Settings > Software update lets you pull newer versions from git."
+echo "============================================="

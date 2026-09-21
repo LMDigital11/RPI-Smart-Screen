@@ -31,26 +31,40 @@ smart-screen-app/   the app itself (Python backend + web frontend)
   backend/          Python API server (localhost) — Immich, weather, HA,
                     USB, audio/alarm, display sleep, WiFi, config
   frontend/         the touchscreen UI (single-page web app)
-pi-gen/             OS build recipe: turns the app into a bootable .img
-deploy/             scripts to install the app onto a running Pi (dev/test)
-docs/build-guide.md step-by-step guide to produce the .img on a Linux machine
+deploy/install.sh   INSTALL IT ONTO A STOCK Raspberry Pi OS — the fast path
+pi-gen/             optional: turns the app into a bootable .img instead
+docs/build-guide.md the .img path, if you ever want it
 ```
 
-## Building the .img (the short version)
+## Quick start (install on stock Raspberry Pi OS — recommended)
 
-You need a Linux machine (or WSL2). See `docs/build-guide.md` for details.
+Skip image building entirely. Flash a normal **Raspberry Pi OS** SD card
+(Desktop 64-bit is easiest), boot the Pi once, then:
 
+```bash
+git clone <your-repo-url> smart-screen     # e.g. https://github.com/you/smart-screen
+cd smart-screen
+sudo bash deploy/install.sh
+sudo reboot
 ```
-git clone https://github.com/RPi-Distro/pi-gen
-cd pi-gen
-cp ~/path/to/this/repo/pi-gen/config ./config
-ln -s ~/path/to/this/repo/pi-gen/stage-smarter ./stage-smarter
-./build-docker.sh
-# → deploy/ smart-screen-*.img
-```
 
-Flash the resulting `.img` to a microSD card with the Raspberry Pi Imager,
-boot the Pi, and the setup wizard walks you through the rest.
+That's it — the installer copies the app to `/opt/smart-screen`, wires up
+WiFi/Immich/weather/Home Assistant backend, the kiosk (autologin into a
+fullscreen browser), the AUX alarm audio, Bluetooth speaker mode, sleep/display
+handling, and the over-the-air updater. After reboot the Pi launches straight
+into the app and the **first-boot setup wizard** appears on the touchscreen.
+
+From then on, settings are changed on the screen (no shell needed). Pushing
+new versions = commit + push to your git repo → the device pulls it via
+**Settings → Software update**.
+
+## Optional: build your own .img instead
+
+Want a single flashable "appliance" image instead? See
+`docs/build-guide.md` — it produces a `smart-screen-*.img` with pi-gen, but
+is heavier: it requires a Linux build machine with Docker, ~10 GB free and
+1–2 h to build. The install approach above gives the identical result in
+~10 minutes.
 
 ## Developing on a PC while the Pi builds are done elsewhere
 

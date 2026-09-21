@@ -1,18 +1,43 @@
-# Building the Smart Screen `.img`
+# Smart Screen — Install & build guide
 
-The Smart Screen is built with **pi-gen**, the official tool the
-Raspberry Pi foundation uses to build Raspberry Pi OS. It stitches
-Raspberry Pi OS **Lite (64-bit)** together with this repo's
-`stage-smarter` stage, producing an SD-card `.img` that boots straight
-into the app.
+## The fast path: install on stock Raspberry Pi OS (recommended)
 
-## What you need
+Flash a normal **Raspberry Pi OS** card (Desktop 64-bit easiest; Lite also
+works), boot once, then from the Pi's terminal:
 
-- A Linux machine (Debian/Ubuntu) or WSL2. ~8 GB free disk, ~1.5–2 h CPU time.
-- `git`, `sudo`, and either **Docker** (recommended) or the native build tools.
-  pi-gen installs the rest itself.
+```bash
+git clone <your-repo-url> smart-screen
+cd smart-screen
+sudo bash deploy/install.sh
+sudo reboot
+```
 
-## Procedure
+`deploy/install.sh` does everything the .img would have: copies the app to
+`/opt/smart-screen`, installs the backend + Chromium kiosk, autologin,
+AUX-audio alarm, Bluetooth speaker mode, USB mounting, sleep/display,
+first-boot setup wizard, and the git-based updater. Re-running it refreshes
+the app (it's idempotent).
+
+After reboot: the Pi boots straight into the app and the setup wizard
+appears on the touchscreen. Future updates: commit + push → on the screen,
+**Settings → Software update → Apply**.
+
+> That's it. The .img build below exists only if you want a single
+> flash-and-forget "appliance" image with no OS setup step.
+
+## Alternative: build your own `.img`
+
+Built with **pi-gen**, the official Raspberry Pi OS build tool, on any
+x86_64 Linux machine (Docker recommended). Same result as the install path,
+in one flashable file.
+
+### What you need
+
+- A Linux machine (Debian/Ubuntu). ~8 GB free disk, ~1.5–2 h CPU time.
+- `git`, `sudo`, and either **Docker** (recommended) or the native build
+  tools.
+
+### Procedure
 
 ```bash
 # from this repo, on the Linux box

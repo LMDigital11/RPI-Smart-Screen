@@ -67,6 +67,7 @@ DEFAULT_CONFIG = {
         "ramp_minutes": 10,
     },
     "bluetooth": {"speaker_name": "Smart Screen", "discoverable": True},
+    "update": {"repo_url": "", "branch": "main"},
 }
 
 

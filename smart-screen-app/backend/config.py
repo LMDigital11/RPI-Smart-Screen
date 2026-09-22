@@ -53,6 +53,7 @@ DEFAULT_CONFIG = {
         "idle_seconds": 30,
         "wake_seconds": 20,
     },
+    "display": {"brightness": 100},
     "schedule": {
         "enabled": False,
         "days": {},

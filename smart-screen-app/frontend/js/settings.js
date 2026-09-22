@@ -1,7 +1,7 @@
 const Settings = {
   cfg: null,
   activeSection: null,
-  open: false,
+  isOpen: false,
   usbDrives: [],
 
   sections() {
@@ -82,6 +82,7 @@ const Settings = {
           this.toggleField("sleep.enabled", "Auto sleep (idle)", s.sleep.enabled, "Turns the screen off after the inactivity timer below."),
           this.numberField("sleep.idle_seconds", "Screen off after idle (seconds)", s.sleep.idle_seconds),
           this.numberField("sleep.wake_seconds", "Stay awake after touch (seconds)", s.sleep.wake_seconds),
+          this.sliderField("display.brightness", "Screen brightness", (s.display || {}).brightness ?? 100),
           this.toggleField("schedule.enabled", "Scheduled screen-off", (s.schedule || {}).enabled, "Keeps the screen off at set times each day, e.g. Monday 12 AM – 3:30 PM."),
           this.scheduleEditorHtml(),
           this.button("Test: sleep now", "block", "sleep_now"),
@@ -138,7 +139,7 @@ const Settings = {
   async open() {
     this.cfg = await loadConfig();
     this.usbDrives = (await apiGet("/api/drives").catch(() => ({}))).drives || [];
-    this.open = true;
+    this.isOpen = true;
     document.getElementById("screen-settings").classList.add("active");
     this.renderNav();
     this.openSection("general");
@@ -147,7 +148,9 @@ const Settings = {
 
   close() {
     document.getElementById("screen-settings").classList.remove("active");
-    this.open = false;
+    this.isOpen = false;
+    const a = document.activeElement;
+    if (a && a.blur) a.blur();
     App.captureIdle?.(false);
     App.refreshStatusDots();
   },
@@ -178,12 +181,22 @@ const Settings = {
   },
 
   wire(root) {
+    root.querySelectorAll('[data-key="display.brightness"]').forEach((el) => {
+      el.addEventListener("input", () => {
+        const ro = el.parentElement.querySelector("[data-bri-readout]");
+        if (ro) ro.textContent = el.value + "%";
+      }, { passive: true });
+    });
+
     root.querySelectorAll("[data-key]").forEach((el) => {
       const key = el.dataset.key;
       const push = () => {
         if (key === "volume") {
           apiPost("/api/audio/volume", { percent: parseInt(el.value, 10) || 0 });
           return;
+        }
+        if (key === "display.brightness") {
+          apiPost("/api/display/brightness", { percent: parseInt(el.value, 10) || 0 });
         }
         const path = key.split(".");
         const patch = {};
@@ -542,6 +555,7 @@ const Settings = {
       return Array.from(el.querySelectorAll(".day-pill.on")).map((p) => parseInt(p.dataset.day, 10));
     }
     if (el.dataset.type === "number") return parseFloat(el.value) || 0;
+    if (el.dataset.type === "slider") return parseInt(el.value, 10) || 0;
     if (el.dataset.type === "time") return el.value;
     return el.value;
   },
@@ -560,6 +574,13 @@ const Settings = {
     const actualKey = opts.key || key;
     return '<div class="field"><label>' + label + '</label><input type="number" data-type="number" data-key="' + actualKey + '" value="' + this.esc(value ?? "") + '"' +
       (opts.max ? " max=" + opts.max : "") + "></div>";
+  },
+
+  sliderField(key, label, value) {
+    const v = Math.max(0, Math.min(100, parseInt(value, 10) || 100));
+    return '<div class="field"><label>' + label + '</label><div class="slider-row">' +
+      '<input type="range" min="0" max="100" step="1" data-type="slider" data-key="' + key + '" value="' + v + '">' +
+      '<span class="bri-readout" data-bri-readout>' + v + "%</span></div></div>";
   },
 
   timeField(key, label, value) {

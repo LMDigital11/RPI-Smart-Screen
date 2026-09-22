@@ -32,9 +32,35 @@ def get_max_brightness():
     return 255
 
 
+def get_brightness():
+    path = next(_backlight_paths(), None)
+    if not path:
+        return None
+    max_b = get_max_brightness()
+    if max_b <= 0:
+        return None
+    try:
+        with open(path) as f:
+            value = int(f.read().strip())
+    except (OSError, ValueError):
+        return None
+    return round(100 * value / max_b)
+
+
+def set_brightness(percent):
+    percent = max(0, min(100, int(percent)))
+    max_b = get_max_brightness()
+    for path in _backlight_paths():
+        _write(path, round(max_b * percent / 100))
+    return percent
+
+
 def set_power(powered):
-    for brightness in _backlight_paths():
-        _write(brightness, get_max_brightness() if powered else 0)
+    if powered:
+        set_brightness(config.get()["display"].get("brightness", 100))
+    else:
+        for brightness in _backlight_paths():
+            _write(brightness, 0)
     import sys
 
     if sys.platform != "win32":
@@ -56,5 +82,7 @@ def status():
     return {
         "supported": len(list(_backlight_paths())) > 0,
         "brightness_max": get_max_brightness(),
+        "brightness": get_brightness(),
+        "display": config.get()["display"],
         "sleep": config.get()["sleep"],
     }

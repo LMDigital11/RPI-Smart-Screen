@@ -13,6 +13,13 @@ const App = {
     document.getElementById("btn-settings-close").addEventListener("click", () => Settings.close());
     document.getElementById("btn-hass-close").addEventListener("click", () => this.closeHass());
 
+    document.addEventListener("pointerdown", (e) => {
+      const a = document.activeElement;
+      if (a && a !== e.target && !(e.target && e.target.closest && e.target.closest("input,textarea,select"))) {
+        a.blur();
+      }
+    }, true);
+
     document.getElementById("wizard-next").addEventListener("click", () => Setup.next());
     document.getElementById("wizard-back").addEventListener("click", () => Setup.back());
 
@@ -57,7 +64,7 @@ const App = {
   },
 
   closeSheets() {
-    if (Settings.open) Settings.close();
+    if (Settings.isOpen) Settings.close();
     else this.closeHass();
   },
 

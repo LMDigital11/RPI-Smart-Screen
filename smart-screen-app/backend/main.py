@@ -31,6 +31,11 @@ app = flask.Flask(
 alarm_scheduler.start()
 mqtt_service.start()
 
+try:
+    display.set_brightness(config.get()["display"].get("brightness", 100))
+except Exception:
+    pass
+
 
 @app.after_request
 def no_cache(response):
@@ -206,6 +211,14 @@ def api_display_power():
     display.set_power(powered)
     mqtt_service.notify_display_change(powered)
     return {"ok": True}
+
+
+@app.post("/api/display/brightness")
+def api_display_brightness():
+    data = flask.request.get_json(silent=True) or {}
+    percent = display.set_brightness(int(data.get("percent", 100)))
+    config.update({"display": {"brightness": percent}})
+    return {"ok": True, "percent": percent}
 
 
 @app.get("/api/mqtt/status")

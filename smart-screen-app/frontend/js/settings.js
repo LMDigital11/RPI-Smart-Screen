@@ -137,8 +137,27 @@ const Settings = {
   },
 
   async open() {
-    this.cfg = await loadConfig();
-    this.usbDrives = (await apiGet("/api/drives").catch(() => ({}))).drives || [];
+    try {
+      this.cfg = await loadConfig();
+      this.usbDrives = (await apiGet("/api/drives").catch(() => ({}))).drives || [];
+    } catch (err) {
+      this.cfg = this.cfg || {
+        device_name: "",
+        setup_complete: true,
+        wifi: {},
+        immich: {},
+        weather: {},
+        slideshow: {},
+        home_assistant: {},
+        mqtt: {},
+        sleep: {},
+        schedule: { days: {} },
+        alarm: {},
+        bluetooth: {},
+        update: {},
+        display: {},
+      };
+    }
     this.isOpen = true;
     document.getElementById("screen-settings").classList.add("active");
     this.renderNav();

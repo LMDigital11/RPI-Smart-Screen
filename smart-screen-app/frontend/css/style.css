@@ -153,14 +153,10 @@ html, body {
 .sheet-actions { display: flex; gap: 8px; }
 .grabber { width: 44px; height: 5px; border-radius: 99px; background: rgba(255,255,255,.25); position: absolute; top: 8px; left: 50%; transform: translateX(-50%); }
 
-#screen-hass.active, #screen-settings.active { display: flex; flex-direction: column; }
-.hass-native { flex: 1; overflow: auto; padding: 14px; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
-#hass-embed-wrap { flex: 1; }
+#screen-hass.active, #screen-settings.active { display: flex; flex-direction: column; min-height: 0; }
+.hass-native { flex: 1; min-height: 0; overflow: auto; padding: 14px; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+#hass-embed-wrap { flex: 1; min-height: 0; }
 #hass-iframe { width: 100%; height: 100%; border: 0; background: #111; }
-
-@media (min-width: 600px) {
-  #screen-hass, #screen-settings { display: block; }
-}
 
 /* ---------- smart home cards ---------- */
 .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(124px, 1fr)); gap: 12px; }
@@ -195,7 +191,7 @@ html, body {
 .hass-actions .btn:active, .hass-actions .hass-embed-toggle:active { opacity: .8; }
 
 /* ---------- settings ---------- */
-#settings-body { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+#settings-body { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 .settings-nav {
   display: flex; gap: 6px; padding: 10px 14px 4px;
   overflow-x: auto; overscroll-behavior-x: contain;
@@ -209,7 +205,7 @@ html, body {
   font-size: 14px; cursor: pointer;
 }
 .settings-nav button.active { background: var(--accent-dim); color: var(--text); border-color: var(--accent); }
-.settings-content { flex: 1; overflow-y: auto; padding: 18px 20px 40px; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+.settings-content { flex: 1; min-height: 0; overflow-y: auto; padding: 18px 20px 40px; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
 .settings-content h3 { font-size: 17px; margin: 6px 0 14px; color: var(--accent); }
 .settings-content h4 { font-size: 14px; margin: 18px 0 8px; color: var(--text-dim); }
 
@@ -261,7 +257,7 @@ html, body {
 .wizard-step { font-size: 13px; color: var(--accent); letter-spacing: .12em; margin-bottom: 8px; }
 .wizard-head h1 { font-size: 34px; font-weight: 700; }
 .wizard-head p { color: var(--text-dim); margin-top: 6px; font-size: 15px; }
-.wizard-body { flex: 1; overflow-y: auto; padding: 4px 4px 16px; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+.wizard-body { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 4px 16px; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
 .wizard-nav { display: flex; gap: 12px; justify-content: flex-end; }
 .wizard-nav .btn { min-width: 130px; font-size: 17px; padding: 15px; }
 .btn.ghost.visible { visibility: visible; }

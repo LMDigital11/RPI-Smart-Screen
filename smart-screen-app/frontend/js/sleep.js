@@ -11,8 +11,8 @@ const Sleep = {
   displaySupported: true,
 
   init() {
-    document.getElementById("app").addEventListener("touchstart", () => this.activity(), { passive: true });
-    document.getElementById("app").addEventListener("mousedown", () => this.activity());
+    document.addEventListener("touchstart", (e) => this.activity(e), { passive: true });
+    document.addEventListener("mousedown", (e) => this.activity(e));
     this.checkTimer = setInterval(() => this.check(), 2000);
     apiGet("/api/display/status").then((s) => {
       this.displaySupported = s.supported;
@@ -30,10 +30,21 @@ const Sleep = {
     this.scheduleDays = sc.days || {};
   },
 
-  activity() {
+  activity(e) {
     this.lastActivity = Date.now();
     if (!this.powerOn) {
       this.wake();
+      this.openAt(e);
+    }
+  },
+
+  openAt(e) {
+    const t = e && e.changedTouches && e.changedTouches[0] ? e.changedTouches[0] : e;
+    if (!t || t.clientX == null) return;
+    const btn = document.getElementById("btn-settings");
+    const r = btn.getBoundingClientRect();
+    if (t.clientX >= r.left && t.clientX <= r.right && t.clientY >= r.top && t.clientY <= r.bottom) {
+      setTimeout(() => Settings.open(), 200);
     }
   },
 
@@ -79,6 +90,7 @@ const Sleep = {
 
   setPower(powered) {
     this.powerOn = powered;
+    if (!powered && window.Kbd) Kbd.hide();
     document.getElementById("app").classList.toggle("screen-off", !powered);
     apiPost("/api/display/power", { powered }).catch(() => {});
     if (powered) this.wakeUntil = Date.now() + this.wakeSeconds * 1000;

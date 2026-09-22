@@ -10,9 +10,14 @@
 #     sudo bash deploy/install.sh
 #     sudo reboot
 #
-# After reboot the Pi autologins into a Chromium kiosk showing the app, and the
-# first-boot setup wizard appears on the touchscreen. Fully idempotent — safe
-# to re-run to refresh the app or re-wire services.
+# After reboot the Pi boots into a systemd-managed WebKitGTK kiosk app showing
+# the app, and the first-boot setup wizard appears on the touchscreen. The
+# kiosk is a small PyGObject app (smart-screen-app/kiosk/webkit_kiosk.py) that
+# fullscreens itself via the GTK API, so it works on Wayland (labwc) and X11
+# sessions alike. Chromium is deliberately avoided: its renderer fails to paint
+# on many arm64 Raspberry Pi OS builds (blank/white tab), while WebKitGTK
+# renders reliably.
+# Fully idempotent — safe to re-run to refresh the app or re-wire services.
 
 set -euo pipefail
 
@@ -41,7 +46,9 @@ fi
 echo "==> Installing packages (this can take a few minutes)"
 apt-get update
 DEBIAN_FRONTEND=noninteractive apt-get install -y \
-  chromium \
+  python3-gi \
+  gir1.2-gtk-3.0 \
+  gir1.2-webkit2-4.1 \
   xserver-xorg \
   xinit \
   openbox \
@@ -137,7 +144,31 @@ WantedBy=multi-user.target
 EOF
 systemctl enable smart-screen.service
 
-echo "==> Kiosk: autologin + openbox autostart"
+echo "==> Kiosk app (WebKitGTK) + service"
+chmod 755 "$DEST/kiosk/webkit_kiosk.py"
+cat > /etc/systemd/system/smart-screen-kiosk.service <<EOF
+[Unit]
+Description=Smart Screen kiosk
+After=graphical.target smart-screen.service
+Requires=smart-screen.service
+
+[Service]
+Type=simple
+User=$BOOT_USER
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/$BOOT_USER/.Xauthority
+Environment=GDK_BACKEND=x11
+Environment=WEBKIT_DISABLE_DMABUF_RENDERER=1
+ExecStart=/usr/bin/python3 $DEST/kiosk/webkit_kiosk.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=graphical.target
+EOF
+systemctl enable smart-screen-kiosk.service
+
+echo "==> Kiosk: autologin"
 mkdir -p /etc/lightdm/lightdm.conf.d
 cat > /etc/lightdm/lightdm.conf.d/50-smart-screen.conf <<EOF
 [Seat:*]
@@ -153,10 +184,6 @@ cat > "/home/$BOOT_USER/.config/openbox/autostart" <<EOF
 #!/bin/bash
 xset s off -dpms
 unclutter -idle 0.5 &
-chromium --kiosk --noerrdialogs --disable-infobars --no-first-run \
-  --disable-translate --check-for-update-interval=31536000 \
-  --overscroll-history-navigation-disabled \
-  http://127.0.0.1:8080 &
 pulseaudio --start --exit-idle-time=-1 2>/dev/null || true
 exit 0
 EOF

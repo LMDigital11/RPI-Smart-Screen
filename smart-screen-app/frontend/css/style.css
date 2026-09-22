@@ -355,3 +355,21 @@ html, body {
   content: ""; position: absolute; inset: 0; background: #000; z-index: 40;
   transition: background .4s;
 }
+#app.screen-off #btn-settings { z-index: 50; pointer-events: auto; }
+
+/* ---------- on-screen keyboard ---------- */
+#kbd {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 100;
+  background: rgba(8,12,20,.94); border-top: 1px solid var(--border);
+  padding: 8px 6px 14px;
+}
+#kbd .kbd-row { display: flex; gap: 5px; margin-bottom: 6px; }
+#kbd button {
+  flex: 1; min-height: 44px; border-radius: 8px;
+  border: 1px solid var(--border); background: rgba(255,255,255,.08);
+  color: var(--text); font-size: 18px; -webkit-tap-highlight-color: transparent;
+}
+#kbd button:active { background: var(--accent-dim); }
+#kbd .kbd-fn { background: rgba(255,255,255,.16); }
+#kbd .kbd-space { flex: 3.5; }
+#kbd .kbd-on { background: var(--accent); border-color: var(--accent); color: #052033; }

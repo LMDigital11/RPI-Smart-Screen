@@ -2,6 +2,8 @@ const Gesture = {
   onSwipeUp: null,
   onSwipeDown: null,
 
+  _noGesture: "input, textarea, select, .settings-content, .hass-native, .wizard-body, .wifi-list",
+
   init() {
     const el = document.getElementById("app");
     let startY = 0;
@@ -10,6 +12,10 @@ const Gesture = {
 
     el.addEventListener("touchstart", (e) => {
       const t = e.changedTouches[0];
+      if (t.target && t.target.closest && t.target.closest(this._noGesture)) {
+        tracking = false;
+        return;
+      }
       startY = t.clientY;
       startX = t.clientX;
       tracking = true;

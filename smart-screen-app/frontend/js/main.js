@@ -9,7 +9,11 @@ const App = {
     Gesture.onSwipeUp = () => this.openHass();
     Gesture.onSwipeDown = () => this.closeSheets();
 
-    document.getElementById("btn-settings").addEventListener("click", () => Settings.open());
+    document.getElementById("btn-settings").addEventListener("click", (e) => {
+      console.log("GEAR click isOpen=" + Settings.isOpen + " sleepOn=" + Sleep.powerOn + " at=" + new Date().toISOString());
+      toast("gear");
+      Settings.open();
+    });
     document.getElementById("btn-settings-close").addEventListener("click", () => Settings.close());
     document.getElementById("btn-hass-close").addEventListener("click", () => this.closeHass());
 

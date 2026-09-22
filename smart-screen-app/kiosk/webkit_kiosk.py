@@ -31,11 +31,12 @@ class Kiosk:
         self.win.connect("delete-event", Gtk.main_quit)
 
         settings = WebKit2.Settings()
-        settings.set_enable_developer_extras(False)
+        settings.set_enable_developer_extras(True)
 
         self.view = WebKit2.WebView()
         self.view.set_settings(settings)
         self.view.connect("context-menu", lambda *_a: True)
+        self.view.connect("console-message", self._console)
 
         self.win.add(self.view)
         self.win.show_all()
@@ -43,6 +44,10 @@ class Kiosk:
 
         GLib.timeout_add_seconds(2, self._pump)
         GLib.timeout_add_seconds(10, self._keepalive)
+
+    def _console(self, *_args):
+        message = _args[2] if len(_args) > 3 else _args[1]
+        print("[page]", str(message), flush=True)
 
     def _pump(self):
         if backend_up() and not self.loaded:

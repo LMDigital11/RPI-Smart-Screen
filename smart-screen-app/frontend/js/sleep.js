@@ -44,6 +44,8 @@ const Sleep = {
     const btn = document.getElementById("btn-settings");
     const r = btn.getBoundingClientRect();
     if (t.clientX >= r.left && t.clientX <= r.right && t.clientY >= r.top && t.clientY <= r.bottom) {
+      console.log("WAKE-openAt in gear rect");
+      toast("wake+gear");
       setTimeout(() => Settings.open(), 200);
     }
   },

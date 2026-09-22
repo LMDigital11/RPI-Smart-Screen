@@ -117,6 +117,7 @@ chmod 755 /usr/local/sbin/smart-screen-update
 printf '%s\n' \
   "# Smart Screen: let the app user run the pinned updater script as root." \
   "$BOOT_USER ALL=(root) NOPASSWD: /usr/local/sbin/smart-screen-update" \
+  "$BOOT_USER ALL=(root) NOPASSWD: /usr/local/sbin/smart-bt.sh" \
   > /etc/sudoers.d/50-smart-screen
 chmod 440 /etc/sudoers.d/50-smart-screen
 visudo -c -f /etc/sudoers.d/50-smart-screen >/dev/null 2>&1 || true
@@ -219,6 +220,27 @@ sleep 600
 bluetoothctl discoverable off >/dev/null 2>&1
 BTEOF
 chmod 755 /usr/local/sbin/smart-bt.sh
+
+# The Pi's radio is often soft-blocked by rfkill after boot; bluetoothctl power
+# on then fails with "org.bluez.Error.Busy", so nothing ever sees the device.
+# Unblock it as root before the backend comes up.
+echo "==> Bluetooth: unblock radio at boot"
+cat > /etc/systemd/system/smart-screen-bt.service <<'EOF'
+[Unit]
+Description=Unblock Raspberry Pi Bluetooth for Smart Screen
+After=bluetooth.service
+Before=smart-screen.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/rfkill unblock bluetooth
+ExecStart=/usr/bin/bluetoothctl power on
+
+[Install]
+WantedBy=multi-user.target
+EOF
+systemctl enable smart-screen-bt.service
 
 echo "==> Boot tweaks: AUX audio, splash off, quicker boot"
 CONFIG_TXT=/boot/firmware/config.txt

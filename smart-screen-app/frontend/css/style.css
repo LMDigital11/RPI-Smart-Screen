@@ -22,18 +22,25 @@ html, body {
   color: var(--text);
   font-family: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
   user-select: none;
-  touch-action: pan-y;
+  -webkit-user-select: none;
+  touch-action: manipulation;
 }
 
-#app { width: 100%; height: 100%; position: relative; }
+#app { width: 100%; height: 100%; position: relative; user-select: none; -webkit-user-select: none; }
 
 .screen {
   position: absolute; inset: 0;
+  isolation: isolate;
   opacity: 0; pointer-events: none;
   transition: opacity .28s ease, transform .34s cubic-bezier(.22,.9,.3,1);
   transform: translateY(0);
+  z-index: 1;
+  -webkit-user-select: none;
 }
 .screen.active { opacity: 1; pointer-events: auto; }
+#screen-main.active { z-index: 2; }
+#screen-hass.active, #screen-settings.active, #screen-setup.active { z-index: 3; }
+#screen-main { touch-action: none; }
 #screen-hass { transform: translateY(100%); }
 #screen-hass.active { transform: translateY(0); }
 #screen-settings { transform: translateY(100%); }
@@ -114,6 +121,8 @@ html, body {
   background: var(--glass-strong);
   border: 1px solid var(--border);
   font-size: 13px; color: var(--text-dim);
+  font: inherit;
+  cursor: pointer;
   animation: bob 2.4s ease-in-out infinite;
 }
 .swipe-hint svg { width: 18px; height: 18px; fill: var(--accent); }
@@ -153,6 +162,8 @@ html, body {
 .sheet-actions { display: flex; gap: 8px; }
 .grabber { width: 44px; height: 5px; border-radius: 99px; background: rgba(255,255,255,.25); position: absolute; top: 8px; left: 50%; transform: translateX(-50%); }
 
+#screen-hass { background: #0d1420; }
+#screen-settings { background: #0d1420; }
 #screen-hass.active, #screen-settings.active { display: flex; flex-direction: column; min-height: 0; }
 .hass-native { flex: 1; min-height: 0; overflow: auto; padding: 14px; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
 #hass-embed-wrap { flex: 1; min-height: 0; }

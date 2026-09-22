@@ -33,11 +33,15 @@ class ImmichClient:
                 return self._photos
             try:
                 base = c["server_url"].rstrip("/")
-                params = {"page": 1, "size": 200, "order": "desc", "withExif": True}
-                resp = requests.get(
+                resp = requests.post(
                     base + "/api/search/metadata",
                     headers=self._headers(),
-                    params=params,
+                    json={
+                        "page": 1,
+                        "size": 200,
+                        "order": "desc",
+                        "withExif": True,
+                    },
                     timeout=API_TIMEOUT,
                 )
                 resp.raise_for_status()
@@ -58,13 +62,19 @@ class ImmichClient:
 
     def fetch(self, photo_id, kind="thumb"):
         base = config.get()["immich"]["server_url"].rstrip("/")
-        params = {"size": "preview"} if kind == "thumb" else {}
-        resp = requests.get(
-            base + "/api/asset/download/" + photo_id,
-            headers=self._headers(),
-            params=params,
-            timeout=API_TIMEOUT,
-        )
+        if kind == "thumb":
+            resp = requests.get(
+                base + "/api/assets/" + photo_id + "/thumbnail",
+                headers=self._headers(),
+                params={"size": "preview"},
+                timeout=API_TIMEOUT,
+            )
+        else:
+            resp = requests.get(
+                base + "/api/assets/" + photo_id + "/original",
+                headers=self._headers(),
+                timeout=API_TIMEOUT,
+            )
         resp.raise_for_status()
         return resp.content, resp.headers.get("Content-Type", "image/jpeg")
 

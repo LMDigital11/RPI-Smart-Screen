@@ -10,6 +10,7 @@ const App = {
     Gesture.onSwipeDown = () => this.closeSheets();
 
     document.getElementById("btn-settings").addEventListener("pointerup", () => Settings.open(), true);
+    document.getElementById("swipe-hint").addEventListener("click", () => this.openHass());
     document.getElementById("btn-settings-close").addEventListener("click", () => Settings.close());
     document.getElementById("btn-hass-close").addEventListener("click", () => this.closeHass());
 

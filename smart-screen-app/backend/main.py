@@ -262,6 +262,13 @@ def api_bluetooth():
     return bluetooth_status_service.status()
 
 
+@app.post("/api/bluetooth/discoverable")
+def api_bluetooth_discoverable():
+    data = flask.request.get_json(silent=True) or {}
+    bluetooth_status_service.set_discoverable(bool(data.get("on", True)))
+    return bluetooth_status_service.status()
+
+
 @app.post("/api/alarm/test")
 def api_alarm_test():
     play("default", 80)
@@ -285,4 +292,11 @@ def api_update_apply():
 
 if __name__ == "__main__":
     force_aux_output()
+    bluetooth_status_service.power_on()
+    try:
+        bluetooth_status_service.set_discoverable(
+            config.get()["bluetooth"].get("discoverable", True)
+        )
+    except Exception:
+        pass
     app.run(host="127.0.0.1", port=8080, debug=False, threaded=True)

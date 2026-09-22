@@ -11,6 +11,7 @@ const Gesture = {
     let tracking = false;
 
     el.addEventListener("touchstart", (e) => {
+      this._consumed = false;
       const t = e.changedTouches[0];
       if (t.target && t.target.closest && t.target.closest(this._noGesture)) {
         tracking = false;
@@ -40,5 +41,7 @@ const Gesture = {
     }, { passive: true });
 
     el.addEventListener("touchend", () => { tracking = false; this._consumed = false; }, { passive: true });
+
+    el.addEventListener("touchcancel", () => { tracking = false; this._consumed = false; }, { passive: true });
   },
 };

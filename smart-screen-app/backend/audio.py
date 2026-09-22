@@ -1,4 +1,5 @@
 import datetime
+import re
 import subprocess
 import threading
 import time
@@ -9,24 +10,41 @@ from config import config
 from homeassistant import home_assistant
 
 
-def force_aux_output():
+def _jack_card():
     try:
-        subprocess.run(
-            ["amixer", "cset", "numid=3", "1"], capture_output=True, text=True
-        )
+        out = subprocess.run(
+            ["aplay", "-l"], capture_output=True, text=True, timeout=10
+        ).stdout
     except Exception:
-        pass
+        return None
+    for line in out.splitlines():
+        m = re.match(r"card\s+(\d+):\s+\S+\s+\[([^\]]+)\]", line)
+        if m and ("Headphones" in m.group(2) or "bcm2835" in m.group(2).lower()):
+            return int(m.group(1))
+    return None
+
+
+def force_aux_output():
+    card = _jack_card()
+    if card is None:
+        return
+    subprocess.run(
+        ["amixer", "-c", str(card), "sset", "Master", "100%"],
+        capture_output=True,
+        text=True,
+    )
 
 
 def set_volume(percent):
-    try:
-        subprocess.run(
-            ["amixer", "set", "PCM", "{}%".format(int(percent))],
-            capture_output=True,
-            text=True,
+    card = _jack_card()
+    base = ["amixer", "-c", str(card)] if card is not None else ["amixer"]
+    level = "{}%".format(max(0, min(100, int(percent))))
+    for ctl in ("Master", "PCM", "Headphone", "Speaker"):
+        r = subprocess.run(
+            base + ["sset", ctl, level], capture_output=True, text=True
         )
-    except Exception:
-        pass
+        if r.returncode == 0:
+            return
 
 
 def play(sound="default", volume=80):
@@ -35,9 +53,13 @@ def play(sound="default", volume=80):
         "default": "/opt/smart-screen/sounds/alarm.wav",
     }
     path = paths.get(sound, sound)
+    card = _jack_card()
+    cmd = ["aplay", "-q", path]
+    if card is not None:
+        cmd = ["aplay", "-q", "-D", "plughw:{},0".format(card), path]
     try:
         subprocess.Popen(
-            ["aplay", "-q", path],
+            cmd,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
@@ -113,9 +135,36 @@ class AlarmScheduler:
 
 
 class Bluetooth:
+    def power_on(self):
+        try:
+            subprocess.run(
+                ["bluetoothctl", "power", "on"], capture_output=True, text=True, timeout=10
+            )
+        except Exception:
+            pass
+
+    def set_discoverable(self, on):
+        try:
+            if on:
+                self.power_on()
+            subprocess.run(
+                ["bluetoothctl", "discoverable", "on" if on else "off"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            subprocess.run(
+                ["bluetoothctl", "pairable", "on"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+        except Exception:
+            pass
+
     def status(self):
         try:
-            discoverable = subprocess.run(
+            show = subprocess.run(
                 ["bluetoothctl", "show"], capture_output=True, text=True, timeout=10
             ).stdout
             paired = subprocess.run(
@@ -124,7 +173,11 @@ class Bluetooth:
                 text=True,
                 timeout=10,
             ).stdout
-            devices = [line.split(" ", 2)[-1] for line in paired.splitlines() if line]
+            devices = [
+                line.split(" ", 2)[-1]
+                for line in paired.splitlines()
+                if re.search(r"([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}", line)
+            ]
             speakers = []
             try:
                 sinks = subprocess.run(
@@ -147,12 +200,20 @@ class Bluetooth:
             except Exception:
                 pass
             return {
-                "discoverable": "Discoverable: yes" in discoverable,
+                "powered": "Powered: yes" in show,
+                "pairable": "Pairable: yes" in show,
+                "discoverable": "Discoverable: yes" in show,
                 "aliases": devices,
                 "a2dp_sinks": speakers,
             }
         except Exception:
-            return {"discoverable": None, "aliases": [], "a2dp_sinks": []}
+            return {
+                "powered": None,
+                "pairable": None,
+                "discoverable": None,
+                "aliases": [],
+                "a2dp_sinks": [],
+            }
 
 
 bluetooth_status_service = Bluetooth()

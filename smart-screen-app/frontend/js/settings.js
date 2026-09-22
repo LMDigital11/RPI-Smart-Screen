@@ -217,6 +217,14 @@ const Settings = {
         if (key === "display.brightness") {
           apiPost("/api/display/brightness", { percent: parseInt(el.value, 10) || 0 });
         }
+        if (key === "bluetooth.discoverable") {
+          const on = !!this.readValue(el);
+          apiPost("/api/bluetooth/discoverable", { on }).then((st) => {
+            toast(st && st.powered
+              ? (st.discoverable ? "Discoverable — pair from your phone now" : "Not discoverable")
+              : "Bluetooth is powered off on the Pi");
+          });
+        }
         const path = key.split(".");
         const patch = {};
         let ref = patch;
@@ -484,7 +492,7 @@ const Settings = {
         break;
       case "bt_status":
         apiGet("/api/bluetooth/status").then((st) =>
-          toast("Discoverable: " + st.discoverable + " · paired: " + (st.aliases.length || "none")));
+          toast("Bluetooth " + (st.powered ? "on" : "off") + " · discoverable: " + st.discoverable + " · paired: " + (st.aliases.length || "none")));
         break;
       case "mqtt_reg": {
         const statusEl = document.getElementById("mqtt-status");

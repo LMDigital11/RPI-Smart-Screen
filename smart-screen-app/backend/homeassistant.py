@@ -120,11 +120,10 @@ def embed_url():
 
 def device_registered():
     try:
-        entity_id = "media_player.smart_screen_{}".format(DEVICE_ID[:8])
         states = home_assistant.states()
-        for state in states:
-            if state.get("entity_id") == entity_id:
-                return True
-        return False
+        return any(
+            (s.get("entity_id") or "").split(".")[-1].startswith("smart_screen")
+            for s in states
+        )
     except Exception:
         return False

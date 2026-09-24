@@ -12,6 +12,8 @@ import schedule
 from immich import immich
 from homeassistant import home_assistant, embed_url, embed_add_device_url, device_registered
 from mqtt import mqtt_service
+from jellyfin import jellyfin
+from player import player
 from audio import (
     alarm_scheduler,
     bluetooth_status_service,
@@ -267,6 +269,116 @@ def api_bluetooth_discoverable():
     data = flask.request.get_json(silent=True) or {}
     bluetooth_status_service.set_discoverable(bool(data.get("on", True)))
     return bluetooth_status_service.status()
+
+
+@app.get("/api/jellyfin/status")
+def api_jellyfin_status():
+    return jellyfin.status()
+
+
+@app.get("/api/jellyfin/browse")
+def api_jellyfin_browse():
+    return jellyfin.browse()
+
+
+@app.get("/api/jellyfin/search")
+def api_jellyfin_search():
+    return {"items": jellyfin.search(flask.request.args.get("q", ""))}
+
+
+@app.get("/api/jellyfin/image/<item_id>")
+def api_jellyfin_image(item_id):
+    try:
+        content, content_type = jellyfin.image_bytes(item_id)
+    except Exception:
+        content, content_type = None, None
+    if not content:
+        return flask.Response("", status=404)
+    return flask.Response(content, content_type=content_type or "image/jpeg")
+
+
+@app.post("/api/jellyfin/play")
+def api_jellyfin_play():
+    data = flask.request.get_json(silent=True) or {}
+    result = jellyfin.browse()
+    if not result.get("enabled"):
+        return {"ok": False, "error": result.get("error") or "Jellyfin not configured"}
+    albums = result.get("albums") or []
+    tracks = []
+    start = 0
+    album_id = data.get("album_id")
+    track_id = data.get("track_id")
+    index = int(data.get("index", 0) or 0)
+    shuffle = bool(data.get("shuffle"))
+    if album_id is not None:
+        album = next(
+            (
+                a
+                for a in albums
+                if str(a.get("key")) == str(album_id) or str(a.get("id")) == str(album_id)
+            ),
+            None,
+        )
+        if album:
+            tracks = album["tracks"]
+            start = max(0, index)
+            if shuffle:
+                order = list(range(len(tracks)))
+                if start < len(order):
+                    first = order.pop(start)
+                    random.shuffle(order)
+                    order = [first] + order
+                else:
+                    random.shuffle(order)
+                tracks = [tracks[i] for i in order]
+                start = 0
+    elif track_id:
+        track = None
+        for album in albums:
+            t = next(
+                (t for t in album["tracks"] if str(t.get("id")) == str(track_id)),
+                None,
+            )
+            if t:
+                track = t
+                track["album"] = album["name"]
+                break
+        if track:
+            tracks = [track]
+    if not tracks:
+        return {"ok": False, "error": "Nothing to play"}
+    player.play(tracks, start)
+    return {"ok": True, "state": player.state()}
+
+
+@app.post("/api/jellyfin/stop")
+def api_jellyfin_stop():
+    player.stop()
+    return {"ok": True, "state": player.state()}
+
+
+@app.post("/api/jellyfin/pause")
+def api_jellyfin_pause():
+    state = player.state()
+    if state["playing"]:
+        player.pause()
+    elif state["paused"]:
+        player.resume()
+    return {"ok": True, "state": player.state()}
+
+
+@app.post("/api/jellyfin/volume")
+def api_jellyfin_volume():
+    data = flask.request.get_json(silent=True) or {}
+    percent = int(data.get("percent", 80))
+    player.set_volume(percent)
+    config.update({"jellyfin": {"volume": player.volume}})
+    return {"ok": True, "state": player.state()}
+
+
+@app.get("/api/jellyfin/now")
+def api_jellyfin_now():
+    return player.state()
 
 
 @app.post("/api/alarm/test")

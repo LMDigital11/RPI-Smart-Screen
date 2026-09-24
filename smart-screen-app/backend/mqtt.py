@@ -44,7 +44,13 @@ class MqttService:
             "display": "smart_screen_display_{}".format(did),
             "alarm": "smart_screen_alarm_{}".format(did),
             "alarm_time": "smart_screen_alarm_time_{}".format(did),
-            "media": "smart_screen_media_{}".format(did),
+            "music_play": "smart_screen_music_play_{}".format(did),
+            "music_pause": "smart_screen_music_pause_{}".format(did),
+            "music_stop": "smart_screen_music_stop_{}".format(did),
+            "music_source": "smart_screen_music_source_{}".format(did),
+            "music_volume": "smart_screen_music_volume_{}".format(did),
+            "brightness": "smart_screen_brightness_{}".format(did),
+            "sleep": "smart_screen_sleep_{}".format(did),
             "notify": "smart_screen_notify_{}".format(did),
         }
 
@@ -96,12 +102,61 @@ class MqttService:
                 "icon": "mdi:alarm",
                 "device_class": "timestamp",
             },
-            (PREFIX + "/media_player", ids["media"]): {
-                "name": "Smart Screen",
-                "unique_id": ids["media"],
+            (PREFIX + "/button", ids["music_play"]): {
+                "name": "Music play",
+                "unique_id": ids["music_play"],
                 "command_topic": _topic("", "media", "command"),
-                "support_play": ["play", "stop"],
-                "icon": "mdi:speaker",
+                "payload_press": "PLAY",
+                "icon": "mdi:play",
+            },
+            (PREFIX + "/button", ids["music_pause"]): {
+                "name": "Music pause",
+                "unique_id": ids["music_pause"],
+                "command_topic": _topic("", "media", "command"),
+                "payload_press": "PAUSE",
+                "icon": "mdi:pause",
+            },
+            (PREFIX + "/button", ids["music_stop"]): {
+                "name": "Music stop",
+                "unique_id": ids["music_stop"],
+                "command_topic": _topic("", "media", "command"),
+                "payload_press": "STOP",
+                "icon": "mdi:stop",
+            },
+            (PREFIX + "/select", ids["music_source"]): {
+                "name": "Music source",
+                "unique_id": ids["music_source"],
+                "command_topic": _topic("", "media", "source/set"),
+                "state_topic": _topic("", "media", "source"),
+                "options": ["Jellyfin", "Silent", "Idle"],
+                "icon": "mdi:music",
+            },
+            (PREFIX + "/number", ids["music_volume"]): {
+                "name": "Music volume",
+                "unique_id": ids["music_volume"],
+                "command_topic": _topic("", "media", "volume/set"),
+                "state_topic": _topic("", "media", "volume"),
+                "min": 0,
+                "max": 100,
+                "step": 5,
+                "mode": "slider",
+                "unit_of_measurement": "%",
+                "icon": "mdi:volume-high",
+            },
+            (PREFIX + "/select", ids["brightness"]): {
+                "name": "Screen brightness",
+                "unique_id": ids["brightness"],
+                "command_topic": _topic("", "display", "brightness/set"),
+                "state_topic": _topic("", "display", "brightness"),
+                "options": ["0", "25", "50", "75", "100"],
+                "icon": "mdi:brightness-6",
+            },
+            (PREFIX + "/button", ids["sleep"]): {
+                "name": "Sleep now",
+                "unique_id": ids["sleep"],
+                "command_topic": _topic("", "button", "sleep/command"),
+                "payload_press": "PRESS",
+                "icon": "mdi:sleep",
             },
             (PREFIX + "/notify", ids["notify"]): {
                 "name": "Smart Screen",
@@ -134,11 +189,53 @@ class MqttService:
         self._publish_discovery()
         on_off = lambda flag: "ON" if flag else "OFF"
         self._publish(_topic("", "display", "state"), on_off(self.display_power))
+        try:
+            from display import status as display_status
+
+            self._publish(
+                _topic("", "display", "brightness"),
+                str(display_status().get("brightness", 100)),
+            )
+        except Exception:
+            pass
         alarm_cfg = config.get().get("alarm") or {}
         self.alarm_enabled = bool(alarm_cfg.get("enabled"))
         self._publish(_topic("", "alarm", "state"), on_off(self.alarm_enabled))
-        self._publish(_topic("", "alarm", "time"), self.next_alarm_iso())
+        alarm_time = self.next_alarm_iso()
+        if alarm_time:
+            self._publish(_topic("", "alarm", "time"), alarm_time)
         self._publish(_topic("", "status", ""), "online")
+        try:
+            from player import player
+
+            self.publish_media_state(player.state())
+        except Exception:
+            pass
+
+    def publish_media_state(self, state):
+        if not self.connected:
+            return
+        st = state or {}
+        if st.get("playing"):
+            mode = "playing"
+        elif st.get("paused"):
+            mode = "paused"
+        else:
+            mode = "idle"
+        track = st.get("track") or {}
+        volume = st.get("volume", 80)
+        self._publish(_topic("", "media", "state"), mode)
+        self._publish(
+            _topic("", "media", "volume"),
+            str(int(round(max(0.0, min(100.0, float(volume)))))),
+        )
+        self._publish(
+            _topic("", "media", "source"),
+            st.get("source") or ("Jellyfin" if mode != "idle" else "Idle"),
+        )
+        self._publish(_topic("", "media", "title"), track.get("name") or "")
+        self._publish(_topic("", "media", "artist"), track.get("artist") or "")
+        self._publish(_topic("", "media", "album"), track.get("album") or "")
 
     def next_alarm_iso(self):
         alarm_cfg = config.get().get("alarm") or {}
@@ -155,7 +252,8 @@ class MqttService:
                 candidate = candidate.replace(hour=hour, minute=minute, second=0, microsecond=0)
                 if candidate <= now:
                     continue
-                return candidate.isoformat()
+                tz = now.astimezone().tzinfo
+                return candidate.replace(tzinfo=tz).isoformat()
         return ""
 
     def _on_connect(self, client, userdata, flags, rc):
@@ -171,8 +269,12 @@ class MqttService:
 
         ids = self.entity_ids()
         client.subscribe([(_topic("", "display", "set"), 0)])
+        client.subscribe([(_topic("", "display", "brightness/set"), 0)])
         client.subscribe([(_topic("", "alarm", "set"), 0)])
         client.subscribe([(_topic("", "media", "command"), 0)])
+        client.subscribe([(_topic("", "media", "volume/set"), 0)])
+        client.subscribe([(_topic("", "media", "source/set"), 0)])
+        client.subscribe([(_topic("", "button", "sleep/command"), 0)])
         client.subscribe([(_topic("", "notify", "command"), 0)])
         client.subscribe([(_topic("", ids["notify"], "command"), 0)])
 
@@ -182,21 +284,56 @@ class MqttService:
     def _on_message(self, client, userdata, msg):
         topic = (msg.topic or "")
         payload = (msg.payload or b"").decode("utf-8", "replace").strip()
-        from display import set_power
+        from display import set_power, set_brightness
         from audio import alarm_scheduler, play, stop
+        from player import player
 
         if topic.endswith("/display/set"):
             set_power(payload == "ON")
             self.display_power = payload == "ON"
             self._publish(_topic("", "display", "state"), "ON" if payload == "ON" else "OFF")
+        elif topic.endswith("/display/brightness/set"):
+            try:
+                percent = max(0, min(100, int(float(payload))))
+            except ValueError:
+                percent = 100
+            set_brightness(percent)
+            self._publish(_topic("", "display", "brightness"), str(percent))
         elif topic.endswith("/alarm/set"):
             self.set_alarm(payload == "ON")
         elif topic.endswith("/media/command"):
             command = (payload or "").upper()
             if command in ("PLAY", "START"):
-                play("default", 80)
-            elif command in ("STOP", "PAUSE", "OFF"):
+                if player.playlist:
+                    player.resume()
+                else:
+                    play("default", 80)
+            elif command in ("PAUSE", "OFF"):
+                player.pause() if player.playlist else stop()
+            elif command in ("STOP",):
+                player.stop()
                 stop()
+        elif topic.endswith("/media/volume/set"):
+            try:
+                level = float(payload)
+            except ValueError:
+                level = 0.8
+            if 0 < level <= 1:
+                player.set_volume(round(level * 100))
+            else:
+                player.set_volume(round(level))
+        elif topic.endswith("/media/source/set"):
+            source = (payload or "").lower()
+            if source == "jellyfin":
+                if player.playlist:
+                    player.resume()
+            else:
+                player.stop()
+                stop()
+        elif topic.endswith("/button/sleep/command"):
+            set_power(False)
+            self.display_power = False
+            self._publish(_topic("", "display", "state"), "OFF")
         elif topic.endswith("/notify/command"):
             self._notifications.append(
                 {"message": payload, "ts": time.time()}
@@ -208,7 +345,9 @@ class MqttService:
         config.save()
         self.alarm_enabled = bool(flag)
         self._publish(_topic("", "alarm", "state"), "ON" if flag else "OFF")
-        self._publish(_topic("", "alarm", "time"), self.next_alarm_iso())
+        alarm_time = self.next_alarm_iso()
+        if alarm_time:
+            self._publish(_topic("", "alarm", "time"), alarm_time)
 
     def start(self):
         if not self.enabled:

@@ -4,7 +4,10 @@ import os
 import sys
 import uuid
 
-DEVICE_ID = uuid.uuid4().hex[:12].upper()
+DEVICE_ID = uuid.uuid5(
+    uuid.NAMESPACE_DNS,
+    "smart-screen-{}".format(uuid.getnode()),
+).hex[:12].upper()
 
 if sys.platform == "win32":
     CONFIG_PATH = os.environ.get("SMART_SCREEN_CONFIG", "config.json")
@@ -68,6 +71,13 @@ DEFAULT_CONFIG = {
         "ramp_minutes": 10,
     },
     "bluetooth": {"speaker_name": "Smart Screen", "discoverable": True},
+    "jellyfin": {
+        "server_url": "",
+        "username": "",
+        "password": "",
+        "api_key": "",
+        "volume": 80,
+    },
     "update": {"repo_url": "", "branch": "main"},
 }
 

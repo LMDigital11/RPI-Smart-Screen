@@ -122,6 +122,20 @@ const Settings = {
         ],
       },
       {
+        id: "music",
+        label: "Music",
+        render: () => [
+          this.note("Play music from a Jellyfin server through the audio jack. Enter your server and account, save, then open the Music button on the home screen to pick albums."),
+          this.textField("jellyfin.server_url", "Jellyfin server", (s.jellyfin || {}).server_url, "e.g. http://192.168.1.93:8096"),
+          this.textField("jellyfin.username", "Username", (s.jellyfin || {}).username),
+          this.passwordField("jellyfin.password", "Password", (s.jellyfin || {}).password),
+          this.passwordField("jellyfin.api_key", "API key (optional)", (s.jellyfin || {}).api_key, "Only if password login is disabled on the server."),
+          this.numberField("jellyfin.volume", "Playback volume (%)", (s.jellyfin || {}).volume, { max: 100 }),
+          this.button("Test music", "primary block", "test_music"),
+          '<div id="music-status" class="test-result"></div>',
+        ],
+      },
+      {
         id: "update",
         label: "Software update",
         render: () => [
@@ -494,6 +508,29 @@ const Settings = {
         apiGet("/api/bluetooth/status").then((st) =>
           toast("Bluetooth " + (st.powered ? "on" : "off") + " · discoverable: " + st.discoverable + " · paired: " + (st.aliases.length || "none")));
         break;
+      case "test_music": {
+        const statusEl = document.getElementById("music-status");
+        if (statusEl) { statusEl.className = "test-result"; statusEl.textContent = "Connecting…"; }
+        apiGet("/api/jellyfin/status").then((st) => {
+          let msg = "";
+          let cls = "bad";
+          if (!st.enabled) {
+            msg = "Fill in the Jellyfin server URL and account details above.";
+          } else if (!st.server_name) {
+            msg = "Could not reach the Jellyfin server at " + (st.server_url || "?");
+          } else if (!st.authenticated) {
+            msg = "Signed in failed: " + (st.error || "check username/password or API key");
+          } else {
+            if (st.version) msg = "Connected to " + st.server_name + " (v" + st.version + ")";
+            else msg = "Connected to " + st.server_name;
+            if (st.user) msg += " · signed in as " + st.user;
+            cls = "ok";
+          }
+          if (statusEl) { statusEl.textContent = msg; statusEl.className = "test-result " + cls; }
+          toast(msg);
+        });
+        break;
+      }
       case "mqtt_reg": {
         const statusEl = document.getElementById("mqtt-status");
         if (statusEl) { statusEl.className = "test-result"; statusEl.textContent = "Connecting…"; }

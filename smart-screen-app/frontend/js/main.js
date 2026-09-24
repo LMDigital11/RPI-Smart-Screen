@@ -14,6 +14,8 @@ const App = {
     document.getElementById("btn-settings-close").addEventListener("click", () => Settings.close());
     document.getElementById("btn-hass-close").addEventListener("click", () => this.closeHass());
 
+    Music.init();
+
     document.addEventListener("pointerdown", (e) => {
       const a = document.activeElement;
       if (!a || a === e.target) return;
@@ -66,6 +68,7 @@ const App = {
 
   closeSheets() {
     if (Settings.isOpen) Settings.close();
+    else if (Music.isOpen) Music.close();
     else this.closeHass();
   },
 

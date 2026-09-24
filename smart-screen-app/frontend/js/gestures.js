@@ -2,7 +2,7 @@ const Gesture = {
   onSwipeUp: null,
   onSwipeDown: null,
 
-  _noGesture: "input, textarea, select, .settings-content, .hass-native, .wizard-body, .wifi-list",
+  _noGesture: "input, textarea, select, .settings-content, .hass-native, .music-body, .wizard-body, .wifi-list",
 
   init() {
     const el = document.getElementById("app");

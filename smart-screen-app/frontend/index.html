@@ -25,20 +25,26 @@
       </button>
     </div>
 
-    <div class="bottom-info">
-      <div id="weather-pill" class="pill hidden">
-        <span id="pill-temp">--°</span>
-        <span id="pill-condition"></span>
+<div class="bottom-info">
+        <div id="weather-pill" class="pill hidden">
+          <span id="pill-temp">--°</span>
+          <span id="pill-condition"></span>
+        </div>
+        <div class="clock">
+          <div id="time" class="time">--:--</div>
+          <div id="date" class="date"></div>
+        </div>
+        <div class="bottom-row">
+          <button id="swipe-hint" class="swipe-hint">
+            <svg viewBox="0 0 24 24"><path d="M12 5.5l-5 5h4V17h2v-6.5h4l-5-5z"/></svg>
+            <span>Smart home</span>
+          </button>
+          <button id="btn-music" class="nav-pill">
+            <span class="np-note">♪</span>
+            <span>Music</span>
+          </button>
+        </div>
       </div>
-      <div class="clock">
-        <div id="time" class="time">--:--</div>
-        <div id="date" class="date"></div>
-      </div>
-      <button id="swipe-hint" class="swipe-hint">
-        <svg viewBox="0 0 24 24"><path d="M12 5.5l-5 5h4V17h2v-6.5h4l-5-5z"/></svg>
-        <span>Smart home</span>
-      </button>
-    </div>
 
     <div id="weather-card" class="weather-card hidden">
       <div class="wc-top">
@@ -72,6 +78,45 @@
     <div id="hass-native" class="hass-native"></div>
     <div id="hass-embed-wrap" class="hidden">
       <iframe id="hass-iframe"></iframe>
+    </div>
+  </section>
+
+  <section id="screen-music" class="screen">
+    <div class="sheet-header">
+      <div class="grabber"></div>
+      <h2>Music</h2>
+      <div class="sheet-actions">
+        <button id="btn-music-close" class="icon-btn">
+          <svg viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </div>
+    </div>
+    <div id="music-body" class="music-body">
+      <div id="music-now" class="music-now hidden">
+        <div class="mn-row">
+          <img id="mn-art" class="mn-art" alt="">
+          <div class="mn-text">
+            <div id="mn-title" class="mn-title">—</div>
+            <div id="mn-sub" class="mn-sub">—</div>
+          </div>
+          <div class="mn-controls">
+            <button id="mn-pause" class="icon-btn mn-btn">⏸</button>
+            <button id="mn-stop" class="icon-btn mn-btn">⏹</button>
+          </div>
+        </div>
+        <div class="mn-volume">
+          <span class="mn-vol-label">Volume</span>
+          <input type="range" id="mn-vol" min="0" max="100" step="1" value="80">
+          <span id="mn-vol-r" class="mn-vol-r">80%</span>
+        </div>
+      </div>
+      <div class="music-tools">
+        <button id="btn-shuffle" class="nav-pill"><span class="np-note">🔀</span><span>Shuffle</span></button>
+      </div>
+      <div id="music-view"></div>
+      <div id="music-empty" class="hass-empty hidden">
+        <p>Jellyfin isn't set up yet — open Settings → Music to add your server.</p>
+      </div>
     </div>
   </section>
 
@@ -115,6 +160,7 @@
 <script src="js/weather.js"></script>
 <script src="js/sleep.js"></script>
 <script src="js/hass.js"></script>
+<script src="js/music.js"></script>
 <script src="js/settings.js"></script>
 <script src="js/setup.js"></script>
 <script src="js/keyboard.js"></script>

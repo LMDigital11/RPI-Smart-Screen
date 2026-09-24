@@ -343,44 +343,113 @@ class Bluetooth:
         return self.status()
 
     def scan(self, duration=12):
+        self._last_bt_error = ""
         self._btctl(["scan", "off"])
         self.power_on()
+        dur = max(4, min(int(duration or 12), 30))
+        found = {}
+        scan_error = ""
+        discovery_started = False
         try:
             proc = subprocess.Popen(
-                ["bluetoothctl", "scan", "on"],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                ["bluetoothctl"],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
             )
-            time.sleep(max(4, min(int(duration), 30)))
-            proc.terminate()
         except Exception:
-            pass
-        self._btctl(["scan", "off"])
-        out = self._btctl(["devices"])
+            return {"devices": [], "error": "Couldn't start Bluetooth discovery"}
+
+        out = []
+        dev_re = re.compile(
+            r"^(?:\[NEW\]\s+)?Device\s+((?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2})\s+(.*)$"
+        )
+
+        def reader():
+            nonlocal scan_error, discovery_started
+            try:
+                for line in proc.stdout:
+                    out.append(line)
+                    low = line.lower()
+                    if "failed to start discovery" in low:
+                        scan_error = "Bluetooth discovery failed to start"
+                    if "discovery started" in low:
+                        discovery_started = True
+                    m = dev_re.match(line.strip())
+                    if m:
+                        found.setdefault(m.group(1).upper(), (m.group(2) or "").strip())
+            except Exception:
+                pass
+
+        rt = threading.Thread(target=reader, daemon=True)
+        rt.start()
+        try:
+            proc.stdin.write("scan on\n")
+            proc.stdin.flush()
+            time.sleep(2)
+            if not discovery_started and not scan_error:
+                try:
+                    proc.stdin.write("scan on\n")
+                    proc.stdin.flush()
+                except Exception:
+                    pass
+            deadline = time.time() + dur
+            while time.time() < deadline:
+                time.sleep(1)
+                try:
+                    proc.stdin.write("devices\n")
+                    proc.stdin.flush()
+                except Exception:
+                    break
+            try:
+                proc.stdin.write("devices\n")
+                proc.stdin.flush()
+            except Exception:
+                pass
+            time.sleep(0.5)
+            try:
+                proc.stdin.write("scan off\nquit\n")
+                proc.stdin.flush()
+            except Exception:
+                pass
+            try:
+                proc.wait(timeout=5)
+            except Exception:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+        except Exception:
+            try:
+                proc.kill()
+            except Exception:
+                pass
+
+        for line in out:
+            m = dev_re.match(line.strip())
+            if m:
+                found.setdefault(m.group(1).upper(), (m.group(2) or "").strip())
+        if not scan_error and not discovery_started:
+            scan_error = "Bluetooth discovery didn't start — check the adapter"
+
         devices = []
-        seen = set()
-        for line in out.splitlines():
-            m = re.match(
-                r"Device\s+((?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2})\s+(.*)", line
-            )
-            if not m:
-                continue
-            mac = m.group(1).upper()
-            if mac in seen:
-                continue
-            seen.add(mac)
-            info = self._btctl(["info", mac])
-            name = (m.group(2) or "").strip() or self._parse_field(info, "Alias")
+        for mac, name in found.items():
+            info = self._btctl(["info", mac], timeout=20)
             devices.append(
                 {
                     "mac": mac,
-                    "name": name or mac,
+                    "name": name or self._parse_field(info, "Alias") or mac,
                     "speaker": self._looks_like_speaker(info),
                     "paired": "Paired: yes" in info,
                     "connected": "Connected: yes" in info,
                 }
             )
-        return devices
+        devices.sort(key=lambda d: (not d["paired"], d["name"].lower()))
+        if scan_error:
+            self._last_bt_error = scan_error
+        return {"devices": devices, "error": scan_error}
 
     @staticmethod
     def _parse_field(info, field):

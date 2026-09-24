@@ -552,7 +552,10 @@ const Settings = {
         if (statusEl) { statusEl.className = "test-result"; statusEl.textContent = "Scanning for 12 seconds…"; }
         apiPost("/api/bluetooth/scan", { duration: 12 }).then((r) => {
           const list = (r && r.devices) || [];
-          if (statusEl) {
+          if (r && r.error && statusEl) {
+            statusEl.className = "test-result bad";
+            statusEl.textContent = r.error + " — try again in a moment";
+          } else if (statusEl) {
             statusEl.className = "test-result " + (list.length ? "ok" : "bad");
             statusEl.textContent = list.length ? list.length + " device(s) found — tap one to connect" : "No speakers found — put your speaker in pairing mode and scan again";
           }

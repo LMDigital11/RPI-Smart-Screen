@@ -77,6 +77,10 @@ echo "==> Copying app to $DEST"
 install -d "$DEST"
 rsync -a --delete "$APP_SRC/" "$DEST/"
 chmod 755 "$DEST/backend/main.py" 2>/dev/null || true
+if git -C "$REPO_DIR" rev-parse --short=8 HEAD >/dev/null 2>&1; then
+  printf '%s\n' "$(git -C "$REPO_DIR" rev-parse --short=8 HEAD)" > "$DEST/VERSION"
+  chown "$BOOT_USER":"$BOOT_USER" "$DEST/VERSION"
+fi
 
 echo "==> Generating alarm sound"
 python3 "$DEST/backend/gen_sound.py"
@@ -110,7 +114,10 @@ python3 "$APP_DIR/backend/gen_sound.py"
 python3 -m pip install --break-system-packages -r "$APP_DIR/backend/requirements.txt" >/dev/null 2>&1 || true
 systemctl daemon-reload
 ( sleep 2 && systemctl restart smart-screen.service ) >/dev/null 2>&1 &
-echo "updated"
+NEW_SHA=$(git -C "$REPO_DIR" rev-parse --short=8 HEAD 2>/dev/null || true)
+printf '%s\n' "${NEW_SHA:-1.0.0}" > "$APP_DIR/VERSION"
+chown "$APP_USER:$APP_USER" "$APP_DIR/VERSION" 2>/dev/null || true
+echo "updated to ${NEW_SHA:-unknown}"
 UPEOF
 chmod 755 /usr/local/sbin/smart-screen-update
 

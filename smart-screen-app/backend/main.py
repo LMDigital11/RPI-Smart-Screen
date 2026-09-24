@@ -1,5 +1,7 @@
 import os
 import random
+import threading
+import time
 
 import flask
 
@@ -271,6 +273,35 @@ def api_bluetooth_discoverable():
     return bluetooth_status_service.status()
 
 
+@app.post("/api/bluetooth/mode")
+def api_bluetooth_mode():
+    data = flask.request.get_json(silent=True) or {}
+    return bluetooth_status_service.set_mode(data.get("mode", "speaker"))
+
+
+@app.post("/api/bluetooth/scan")
+def api_bluetooth_scan():
+    data = flask.request.get_json(silent=True) or {}
+    return {
+        "devices": bluetooth_status_service.scan(
+            duration=int(data.get("duration", 12))
+        )
+    }
+
+
+@app.post("/api/bluetooth/connect")
+def api_bluetooth_connect():
+    data = flask.request.get_json(silent=True) or {}
+    return bluetooth_status_service.connect(
+        data.get("mac", ""), name=data.get("name", "")
+    )
+
+
+@app.post("/api/bluetooth/disconnect")
+def api_bluetooth_disconnect():
+    return bluetooth_status_service.disconnect()
+
+
 @app.get("/api/jellyfin/status")
 def api_jellyfin_status():
     return jellyfin.status()
@@ -406,9 +437,23 @@ if __name__ == "__main__":
     force_aux_output()
     bluetooth_status_service.power_on()
     try:
-        bluetooth_status_service.set_discoverable(
-            config.get()["bluetooth"].get("discoverable", True)
-        )
+        mode = config.get()["bluetooth"].get("mode", "speaker")
+        if mode == "connect":
+            bluetooth_status_service.set_mode("connect")
+            mac = config.get().get("bluetooth", {}).get("bt_speaker", "")
+            if mac:
+                def rejoin():
+                    time.sleep(6)
+                    bluetooth_status_service.connect(
+                        mac,
+                        name=config.get().get("bluetooth", {}).get("bt_speaker_name", ""),
+                        pair=False,
+                    )
+                threading.Thread(target=rejoin, daemon=True).start()
+        else:
+            bluetooth_status_service.set_discoverable(
+                config.get()["bluetooth"].get("discoverable", True)
+            )
     except Exception:
         pass
     app.run(host="127.0.0.1", port=8080, debug=False, threaded=True)

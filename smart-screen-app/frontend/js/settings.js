@@ -115,9 +115,19 @@ const Settings = {
         id: "bluetooth",
         label: "Bluetooth speaker",
         render: () => [
-          this.toggleField("bluetooth.discoverable", "Discoverable", s.bluetooth.discoverable),
-          this.textField("bluetooth.speaker_name", "Speaker name", s.bluetooth.speaker_name),
-          this.note("From your phone's Bluetooth menu, pair with this device — music then plays through the AUX jack."),
+          this.toggleField("bluetooth_mode", "Connect to a Bluetooth speaker", (s.bluetooth || {}).mode === "connect", "Turn ON to stream the Pi's audio to an external Bluetooth speaker instead. This turns OFF the Pi being a speaker that phones pair with."),
+          '<div id="bt-mode-body">' + ((s.bluetooth || {}).mode === "connect"
+            ? [
+                '<div id="bt-connect-status" class="test-result"></div>',
+                this.button("Scan for Bluetooth speakers", "primary block", "bt_scan"),
+                '<div id="bt-scan-list"></div>',
+                this.button("Disconnect speaker", "block", "bt_disconnect"),
+              ].join("")
+            : [
+                this.toggleField("bluetooth.discoverable", "Discoverable", s.bluetooth.discoverable),
+                this.textField("bluetooth.speaker_name", "Speaker name", s.bluetooth.speaker_name),
+                this.note("From your phone's Bluetooth menu, pair with this device — music then plays through the selected audio output."),
+              ].join("")) + "</div>",
           this.button("Check status", "block", "bt_status"),
         ],
       },
@@ -210,6 +220,23 @@ const Settings = {
     if (sec.heading) content.insertAdjacentHTML("beforeend", "<h3>" + sec.heading + "</h3>");
     content.insertAdjacentHTML("beforeend", sec.render().join(""));
     this.wire(content);
+    if (id === "update") {
+      apiGet("/api/update/status").then((r) => {
+        const el = document.getElementById("update-status");
+        if (el && r) el.textContent = "Installed: " + (r.current_version || "?") + (r.repo_configured ? " — repo configured" : " — no repo set yet");
+      }).catch(() => {});
+    }
+    if (id === "bluetooth") {
+      apiGet("/api/bluetooth/status").then((r) => {
+        const el = document.getElementById("bt-connect-status");
+        if (el && r) {
+          el.className = "test-result" + (r.bt_connected ? " ok" : "");
+          el.textContent = r.bt_connected
+            ? "Connected to " + (r.bt_speaker_name || r.bt_speaker) + " — audio goes to it"
+            : (r.mode === "connect" ? "Not connected — scan below to connect a Bluetooth speaker" : "Pi is a Bluetooth speaker");
+        }
+      }).catch(() => {});
+    }
     App.captureIdle?.(true);
   },
 
@@ -239,6 +266,16 @@ const Settings = {
               : "Bluetooth is powered off on the Pi");
           });
         }
+        if (key === "bluetooth_mode") {
+          const mode = el.classList.contains("on") ? "connect" : "speaker";
+          apiPost("/api/bluetooth/mode", { mode }).then((st) => {
+            toast(st && st.mode === "connect"
+              ? "Now streaming to a Bluetooth speaker — scan above and connect one"
+              : "Pi is a Bluetooth speaker again");
+            Settings.openSection("bluetooth");
+          });
+          return;
+        }
         const path = key.split(".");
         const patch = {};
         let ref = patch;
@@ -259,7 +296,7 @@ const Settings = {
     });
 
     root.querySelectorAll("[data-action]").forEach((el) => {
-      el.addEventListener("click", () => this.runAction(el.dataset.action), { passive: true });
+      el.addEventListener("click", () => this.runAction(el.dataset.action, el), { passive: true });
     });
 
     root.querySelectorAll(".toggle").forEach((el) => {
@@ -471,7 +508,7 @@ const Settings = {
     return h + ":" + String(m).padStart(2, "0") + " " + ap;
   },
 
-  runAction(id) {
+  runAction(id, el) {
     switch (id) {
       case "rerun":
         saveConfig({ setup_complete: false }).then(() => window.location.reload());
@@ -506,8 +543,51 @@ const Settings = {
         break;
       case "bt_status":
         apiGet("/api/bluetooth/status").then((st) =>
-          toast("Bluetooth " + (st.powered ? "on" : "off") + " · discoverable: " + st.discoverable + " · paired: " + (st.aliases.length || "none")));
+          toast("Bluetooth " + (st.powered ? "on" : "off") + " · mode: " + (st.bt_connected ? "streaming to " + (st.bt_speaker_name || st.bt_speaker) : (st.mode === "connect" ? "connecting to a speaker" : "speaker" + (st.discoverable ? " (discoverable)" : ""))) + " · paired: " + (st.aliases.length || "none")));
         break;
+      case "bt_scan": {
+        const listEl = document.getElementById("bt-scan-list");
+        const statusEl = document.getElementById("bt-connect-status");
+        if (listEl) listEl.innerHTML = "";
+        if (statusEl) { statusEl.className = "test-result"; statusEl.textContent = "Scanning for 12 seconds…"; }
+        apiPost("/api/bluetooth/scan", { duration: 12 }).then((r) => {
+          const list = (r && r.devices) || [];
+          if (statusEl) {
+            statusEl.className = "test-result " + (list.length ? "ok" : "bad");
+            statusEl.textContent = list.length ? list.length + " device(s) found — tap one to connect" : "No speakers found — put your speaker in pairing mode and scan again";
+          }
+          if (listEl) {
+            listEl.innerHTML = list.map((d) =>
+              '<div class="field bt-row"><label>' + this.esc(d.name) + " <span class='hint'>" + d.mac + (d.speaker ? " · speaker" : "") + (d.connected ? " · connected" : d.paired ? " · paired" : "") + "</span></label>" +
+              '<button class="btn" data-action="bt_connect" data-mac="' + this.esc(d.mac) + '" data-name="' + this.esc(d.name) + '">Connect</button></div>').join("") ||
+              "";
+            listEl.querySelectorAll("[data-action]").forEach((b) => b.addEventListener("click", () => this.runAction(b.dataset.action, b), { passive: true }));
+          }
+        }).catch(() => { if (statusEl) { statusEl.className = "test-result bad"; statusEl.textContent = "Scan failed"; } });
+        break;
+      }
+      case "bt_connect": {
+        const statusEl = document.getElementById("bt-connect-status");
+        const mac = el && el.dataset.mac;
+        if (!mac) break;
+        if (statusEl) { statusEl.className = "test-result"; statusEl.textContent = "Connecting to " + ((el && el.dataset.name) || mac) + "…"; }
+        apiPost("/api/bluetooth/connect", { mac, name: (el && el.dataset.name) || "" }).then((st) => {
+          if (statusEl) {
+            statusEl.className = "test-result " + (st && st.bt_connected ? "ok" : "bad");
+            statusEl.textContent = st && st.bt_connected
+              ? "Connected to " + (st.bt_speaker_name || st.bt_speaker) + " — audio now goes to it"
+              : "Couldn't connect — is the speaker powered on and in pairing mode?";
+          }
+        });
+        break;
+      }
+      case "bt_disconnect": {
+        const statusEl = document.getElementById("bt-connect-status");
+        apiPost("/api/bluetooth/disconnect").then((st) => {
+          if (statusEl) { statusEl.className = "test-result ok"; statusEl.textContent = "Disconnected — audio back to the audio jack (AUX)."; }
+        });
+        break;
+      }
       case "test_music": {
         const statusEl = document.getElementById("music-status");
         if (statusEl) { statusEl.className = "test-result"; statusEl.textContent = "Connecting…"; }

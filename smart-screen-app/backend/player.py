@@ -6,7 +6,7 @@ import threading
 import time
 
 from config import config
-from audio import set_volume, _jack_card
+from audio import bluetooth_status_service
 
 
 class Player:
@@ -26,7 +26,7 @@ class Player:
     def set_volume(self, percent):
         with self._lock:
             self.volume = max(0, min(100, int(percent)))
-        set_volume(self.volume)
+        bluetooth_status_service.set_volume(self.volume)
         self._publish()
 
     def play(self, tracks, start_index=0):
@@ -40,7 +40,7 @@ class Player:
             self.playing = True
             self.paused = False
             self.volume = int(config.get().get("jellyfin", {}).get("volume", 80))
-        set_volume(self.volume)
+        bluetooth_status_service.set_volume(self.volume)
         self._publish()
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
@@ -65,7 +65,7 @@ class Player:
             if self.index < 0:
                 self.index = 0
             self.volume = int(config.get().get("jellyfin", {}).get("volume", 80))
-        set_volume(self.volume)
+        bluetooth_status_service.set_volume(self.volume)
         self._publish()
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
@@ -121,8 +121,7 @@ class Player:
                 self.current = track
             self._publish()
             url = jellyfin.stream_url(track["id"])
-            card = _jack_card()
-            device = "plughw:{},0".format(card) if card is not None else "default"
+            device = bluetooth_status_service.output_alsa_device()
             cmd = [
                 "ffmpeg",
                 "-hide_banner",

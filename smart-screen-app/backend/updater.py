@@ -22,7 +22,7 @@ def current_version():
 
 
 def local_short_commit():
-    match = re.search(r"[0-9a-fA-F]{8,}", current_version())
+    match = re.search(r"[0-9a-fA-F]{7,}", current_version())
     return match.group(0)[:8] if match else None
 
 

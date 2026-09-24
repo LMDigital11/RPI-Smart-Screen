@@ -70,7 +70,13 @@ DEFAULT_CONFIG = {
         "light_entity": "light.bedroom_lamp",
         "ramp_minutes": 10,
     },
-    "bluetooth": {"speaker_name": "Smart Screen", "discoverable": True},
+    "bluetooth": {
+        "speaker_name": "Smart Screen",
+        "discoverable": True,
+        "mode": "speaker",
+        "bt_speaker": "",
+        "bt_speaker_name": "",
+    },
     "jellyfin": {
         "server_url": "",
         "username": "",

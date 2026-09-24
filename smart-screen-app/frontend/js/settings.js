@@ -576,7 +576,7 @@ const Settings = {
             statusEl.className = "test-result " + (st && st.bt_connected ? "ok" : "bad");
             statusEl.textContent = st && st.bt_connected
               ? "Connected to " + (st.bt_speaker_name || st.bt_speaker) + " — audio now goes to it"
-              : "Couldn't connect — is the speaker powered on and in pairing mode?";
+              : (st && st.bt_error) || "Couldn't connect — is the speaker powered on and in pairing mode?";
           }
         });
         break;

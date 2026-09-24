@@ -134,6 +134,10 @@ class AlarmScheduler:
 
 
 class Bluetooth:
+    def __init__(self):
+        self._last_default_sink = None
+        self._last_bt_error = ""
+
     def power_on(self):
         try:
             subprocess.run(
@@ -172,6 +176,95 @@ class Bluetooth:
             return (resp.stdout or "") + (resp.stderr or "")
         except Exception:
             return ""
+
+    def _btctl_session(self, commands, timeout=70):
+        try:
+            proc = subprocess.Popen(
+                ["bluetoothctl"],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+            )
+        except Exception:
+            return ""
+
+        out = []
+        answers = [
+            "enter pin code",
+            "enter passkey",
+            "confirm passkey",
+            "confirm pin",
+            "authorize service",
+        ]
+        reply = {
+            "enter pin code": "0000",
+            "enter passkey": "0000",
+            "confirm passkey": "yes",
+            "confirm pin": "yes",
+            "authorize service": "yes",
+        }
+
+        def reader():
+            try:
+                for line in proc.stdout:
+                    out.append(line)
+                    low = line.lower()
+                    for key in answers:
+                        if key in low:
+                            try:
+                                proc.stdin.write(reply[key] + "\n")
+                                proc.stdin.flush()
+                            except Exception:
+                                pass
+                            break
+            except Exception:
+                pass
+
+        rt = threading.Thread(target=reader, daemon=True)
+        rt.start()
+        try:
+            for cmd in commands:
+                try:
+                    proc.stdin.write(cmd + "\n")
+                    proc.stdin.flush()
+                except Exception:
+                    break
+                time.sleep(1.0)
+            deadline = time.time() + timeout
+            while time.time() < deadline:
+                if not rt.is_alive():
+                    break
+                blob = "".join(out)
+                if (
+                    "failed to pair" in blob.lower()
+                    or "failed to connect" in blob.lower()
+                    or "not available" in blob.lower()
+                ):
+                    break
+                if "connected: yes" in blob.lower():
+                    time.sleep(1)
+                    break
+                time.sleep(0.5)
+            try:
+                proc.stdin.write("quit\n")
+                proc.stdin.flush()
+            except Exception:
+                pass
+            try:
+                proc.wait(timeout=5)
+            except Exception:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+        except Exception:
+            try:
+                proc.kill()
+            except Exception:
+                pass
+        return "".join(out)
 
     def _pulse_sinks(self):
         try:
@@ -310,14 +403,45 @@ class Bluetooth:
 
     def connect(self, mac, name="", pair=True):
         mac = self._norm_mac(mac)
+        self._last_bt_error = ""
         self.power_on()
         self._btctl(["scan", "off"])
         info = self._btctl(["info", mac], timeout=30)
-        if "Paired: yes" not in info and pair:
-            self._btctl(["pairable", "on"])
-            self._btctl(["pair", mac], timeout=40)
-        self._btctl(["trust", mac])
-        self._btctl(["connect", mac], timeout=40)
+        if "not available" in info.lower():
+            try:
+                proc = subprocess.Popen(
+                    ["bluetoothctl", "scan", "on"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                time.sleep(8)
+                proc.terminate()
+            except Exception:
+                pass
+            self._btctl(["scan", "off"])
+            info = self._btctl(["info", mac], timeout=30)
+            if "not available" in info.lower():
+                self._last_bt_error = (
+                    "Device not found — put the speaker in pairing mode and scan again"
+                )
+                return self.status()
+
+        was_paired = "Paired: yes" in info
+        cmds = ["agent on", "default-agent"]
+        if not was_paired and pair:
+            cmds.append("pairable on")
+            cmds.append("pair " + mac)
+        cmds.append("trust " + mac)
+        cmds.append("connect " + mac)
+        out = self._btctl_session(cmds, timeout=75)
+        blob = (out or "").lower()
+        if "failed to pair" in blob:
+            self._last_bt_error = (
+                "Pairing failed — put the speaker in pairing mode and try again"
+            )
+        elif "failed to connect" in blob:
+            self._last_bt_error = "Couldn't connect to the speaker"
+
         sink = ""
         alias = ""
         for _ in range(25):
@@ -330,6 +454,8 @@ class Bluetooth:
             if sink:
                 break
         if not sink:
+            if not self._last_bt_error:
+                self._last_bt_error = "Connected but no audio output appeared yet"
             return self.status()
         name = (name or alias or mac)
         prev = self._default_sink()
@@ -341,6 +467,7 @@ class Bluetooth:
         cfg["bt_speaker"] = mac
         cfg["bt_speaker_name"] = name
         config.update({"bluetooth": cfg})
+        self._last_bt_error = ""
         return self.status()
 
     def disconnect(self):
@@ -349,6 +476,7 @@ class Bluetooth:
         if mac:
             self._btctl(["disconnect", mac], timeout=20)
         self._restore_default_sink()
+        self._last_bt_error = ""
         return self.status()
 
     def _restore_default_sink(self):
@@ -432,6 +560,7 @@ class Bluetooth:
                 "bt_speaker_name": cfg.get("bt_speaker_name", ""),
                 "bt_connected": bool(sink),
                 "bt_sink": sink,
+                "bt_error": self._last_bt_error or "",
                 "default_sink": self._default_sink(),
             }
         except Exception:
@@ -446,6 +575,7 @@ class Bluetooth:
                 "bt_speaker_name": "",
                 "bt_connected": False,
                 "bt_sink": "",
+                "bt_error": self._last_bt_error or "",
                 "default_sink": None,
             }
 

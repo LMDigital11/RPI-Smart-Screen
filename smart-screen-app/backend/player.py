@@ -22,6 +22,10 @@ class Player:
         self.paused = False
         self.volume = 80
         self.last_error = ""
+        self._play_epoch = None
+        self._play_offset = 0
+        self._paused_at = None
+        self._seek_to = None
 
     def set_volume(self, percent):
         with self._lock:
@@ -40,6 +44,10 @@ class Player:
             self.playing = True
             self.paused = False
             self.volume = int(config.get().get("jellyfin", {}).get("volume", 80))
+            self._play_epoch = None
+            self._play_offset = 0
+            self._paused_at = None
+            self._seek_to = None
         bluetooth_status_service.set_volume(self.volume)
         self._publish()
         self._thread = threading.Thread(target=self._run, daemon=True)
@@ -51,6 +59,7 @@ class Player:
                 return
             self.paused = True
             self.playing = False
+            self._paused_at = self._compute_position()
         self._kill_proc()
         self._publish()
 
@@ -64,11 +73,84 @@ class Player:
             self.playing = True
             if self.index < 0:
                 self.index = 0
+            if self._paused_at:
+                self._seek_to = max(0, int(self._paused_at))
+            self._paused_at = None
             self.volume = int(config.get().get("jellyfin", {}).get("volume", 80))
         bluetooth_status_service.set_volume(self.volume)
         self._publish()
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
+
+    def next(self):
+        self._lock.acquire()
+        try:
+            if not self.playlist or self.index < 0:
+                return
+            idx = (self.index + 1) % len(self.playlist)
+        finally:
+            self._lock.release()
+        self._jump(idx)
+
+    def prev(self):
+        self._lock.acquire()
+        try:
+            if not self.playlist or self.index < 0:
+                return
+            if self.index == 0 or self._compute_position() > 8:
+                back_to_zero = True
+            else:
+                back_to_zero = False
+                idx = self.index - 1
+        finally:
+            self._lock.release()
+        if back_to_zero:
+            self.seek(0)
+        else:
+            self._jump(idx)
+
+    def seek(self, pos):
+        with self._lock:
+            if not self.playlist or self.index < 0:
+                return
+            pos = max(0, int(pos))
+            dur = (self.current or {}).get("seconds") or 0
+            if dur:
+                pos = min(pos, dur - 1)
+            self._seek_to = pos
+            if self.paused:
+                self._paused_at = pos
+                self._publish()
+                return
+            if not self.playing:
+                return
+        self._kill_proc()
+        self._publish()
+
+    def position(self):
+        with self._lock:
+            return self._compute_position()
+
+    def _jump(self, new_index):
+        with self._lock:
+            self.index = new_index
+            self._seek_to = None
+            self._paused_at = None
+            self._play_epoch = None
+            self._play_offset = 0
+            self.playing = True
+            self.paused = False
+        self._stop_current()
+        self._publish()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+
+    def _compute_position(self):
+        if self.paused:
+            return int(self._paused_at or 0)
+        if self._play_epoch is None:
+            return 0
+        return int(self._play_offset + (time.time() - self._play_epoch))
 
     def stop(self):
         self._stop_current()
@@ -76,6 +158,10 @@ class Player:
             self.playing = False
             self.paused = False
             self.current = None
+            self._play_epoch = None
+            self._play_offset = 0
+            self._paused_at = None
+            self._seek_to = None
         self._publish()
 
     def _stop_current(self):
@@ -122,23 +208,21 @@ class Player:
             self._publish()
             url = jellyfin.stream_url(track["id"])
             device = bluetooth_status_service.output_alsa_device()
-            cmd = [
-                "ffmpeg",
-                "-hide_banner",
-                "-loglevel",
-                "error",
-                "-nostdin",
-                "-i",
-                url,
-                "-f",
-                "alsa",
-                device,
-            ]
+            base = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin"]
+            end = ["-f", "alsa", device]
             attempts = 0
             while True:
                 with self._lock:
                     if self._stop.is_set() or self.paused:
                         return
+                    start = self._seek_to
+                    if start is not None:
+                        self._seek_to = None
+                    else:
+                        start = 0
+                    cmd = base + ["-i", url] + (["-ss", str(start)] if start else []) + end
+                    self._play_offset = start
+                    self._play_epoch = time.time()
                 try:
                     self.last_error = ""
                     log = tempfile.NamedTemporaryFile("w+", suffix=".log", delete=False)
@@ -164,6 +248,8 @@ class Player:
                 with self._lock:
                     if self._stop.is_set() or self.paused:
                         return
+                    if self._seek_to is not None:
+                        continue
                     if rc != 0 and elapsed < 8 and attempts < 3:
                         attempts += 1
                         self.last_error = err or "ffmpeg exited ({})".format(rc)
@@ -172,7 +258,7 @@ class Player:
                     if rc != 0:
                         self.last_error = err or "ffmpeg exited ({})".format(rc)
                     break
-            self._publish()
+                self._publish()
             with self._lock:
                 if self._stop.is_set() or self.paused:
                     return
@@ -191,6 +277,7 @@ class Player:
                 "track": self.current,
                 "index": self.index,
                 "playlist_len": len(self.playlist),
+                "position": self._compute_position(),
                 "volume": self.volume,
                 "source": "Jellyfin" if (self.playing or self.paused) else "Idle",
                 "last_error": self.last_error or "",

@@ -208,6 +208,9 @@ html, body {
 .mn-sub { font-size: 13px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
 .mn-controls { display: flex; gap: 8px; flex-shrink: 0; }
 .mn-btn { width: 46px; height: 46px; font-size: 18px; }
+.mn-seek { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+.mn-seek .mn-time { font-size: 12px; color: var(--text-dim); font-variant-numeric: tabular-nums; min-width: 40px; text-align: center; }
+.mn-seek input[type=range] { flex: 1; height: 40px; accent-color: var(--accent); min-width: 0; }
 .mn-volume { display: flex; align-items: center; gap: 10px; }
 .mn-vol-label { font-size: 13px; color: var(--text-dim); }
 .mn-volume input[type=range] { flex: 1; height: 40px; accent-color: var(--accent); min-width: 0; }

@@ -22,6 +22,32 @@ const Music = {
         document.getElementById("music-now").classList.add("hidden");
       });
     }, true);
+    document.getElementById("mn-prev").addEventListener("click", () => {
+      apiPost("/api/jellyfin/prev").then((r) => {
+        this.lastState = r.state;
+        this.updateNow();
+      });
+    }, true);
+    document.getElementById("mn-next").addEventListener("click", () => {
+      apiPost("/api/jellyfin/next").then((r) => {
+        this.lastState = r.state;
+        this.updateNow();
+      });
+    }, true);
+    const seekEl = document.getElementById("mn-seek");
+    seekEl.addEventListener("input", (e) => {
+      this._scrubbing = true;
+      document.getElementById("mn-pos").textContent = this.fmt(parseInt(e.target.value, 10) || 0);
+    }, { passive: true });
+    seekEl.addEventListener("change", (e) => {
+      apiPost("/api/jellyfin/seek", { position: parseInt(e.target.value, 10) || 0 }).then((r) => {
+        this._scrubbing = false;
+        if (r && r.state) {
+          this.lastState = r.state;
+          this.updateNow();
+        }
+      });
+    });
     document.getElementById("mn-vol").addEventListener("input", (e) => {
       const p = parseInt(e.target.value, 10);
       document.getElementById("mn-vol-r").textContent = p + "%";
@@ -174,9 +200,15 @@ const Music = {
       }
       this.lastState = st;
       if (st.track && (st.playing || st.paused)) {
+        if (st.track.id !== this._lastTrackId) {
+          this._lastTrackId = st.track.id;
+          this._scrubbing = false;
+        }
         this.updateNow();
         this.markPlayingId(st.track.id);
       } else {
+        this._lastTrackId = null;
+        this._scrubbing = false;
         document.getElementById("music-now").classList.add("hidden");
       }
     } catch (e) { /* ignore */ }
@@ -203,6 +235,18 @@ const Music = {
     document.getElementById("mn-vol").value = vol;
     document.getElementById("mn-vol-r").textContent = vol + "%";
     document.getElementById("mn-pause").textContent = st.paused ? "▶" : "⏸";
+    const seekEl = document.getElementById("mn-seek");
+    const dur = st.track.seconds || 0;
+    const pos = Math.min(st.position || 0, dur || (st.position || 0));
+    const max = dur || 1;
+    if (seekEl.max !== String(max)) seekEl.max = max;
+    if (this._scrubbing) {
+      document.getElementById("mn-dur").textContent = this.fmt(dur);
+    } else {
+      seekEl.value = String(Math.min(pos, max));
+      document.getElementById("mn-pos").textContent = this.fmt(pos);
+      document.getElementById("mn-dur").textContent = this.fmt(dur);
+    }
   },
 
   fmt(sec) {

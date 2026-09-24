@@ -100,9 +100,16 @@
             <div id="mn-sub" class="mn-sub">—</div>
           </div>
           <div class="mn-controls">
+            <button id="mn-prev" class="icon-btn mn-btn">⏮</button>
             <button id="mn-pause" class="icon-btn mn-btn">⏸</button>
+            <button id="mn-next" class="icon-btn mn-btn">⏭</button>
             <button id="mn-stop" class="icon-btn mn-btn">⏹</button>
           </div>
+        </div>
+        <div class="mn-seek">
+          <span id="mn-pos" class="mn-time">0:00</span>
+          <input type="range" id="mn-seek" min="0" max="1" step="1" value="0">
+          <span id="mn-dur" class="mn-time">0:00</span>
         </div>
         <div class="mn-volume">
           <span class="mn-vol-label">Volume</span>

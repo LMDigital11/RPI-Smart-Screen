@@ -398,6 +398,25 @@ def api_jellyfin_pause():
     return {"ok": True, "state": player.state()}
 
 
+@app.post("/api/jellyfin/next")
+def api_jellyfin_next():
+    player.next()
+    return {"ok": True, "state": player.state()}
+
+
+@app.post("/api/jellyfin/prev")
+def api_jellyfin_prev():
+    player.prev()
+    return {"ok": True, "state": player.state()}
+
+
+@app.post("/api/jellyfin/seek")
+def api_jellyfin_seek():
+    data = flask.request.get_json(silent=True) or {}
+    player.seek(int(data.get("position", 0)))
+    return {"ok": True, "state": player.state()}
+
+
 @app.post("/api/jellyfin/volume")
 def api_jellyfin_volume():
     data = flask.request.get_json(silent=True) or {}

@@ -469,6 +469,10 @@ if __name__ == "__main__":
         if mode == "connect":
             bluetooth_status_service.set_mode("connect")
             mac = config.get().get("bluetooth", {}).get("bt_speaker", "")
+            if not mac:
+                sink = bluetooth_status_service._bt_sink()
+                if sink:
+                    mac = bluetooth_status_service._adopt_sink(sink)
             if mac:
                 def rejoin():
                     time.sleep(6)

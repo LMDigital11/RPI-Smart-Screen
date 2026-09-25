@@ -303,23 +303,44 @@ class Bluetooth:
 
     @staticmethod
     def _norm_mac(mac):
-        return str(mac or "").upper().replace("-", ":")
+        return str(mac or "").upper().replace("-", ":").replace("_", ":")
 
     def _bt_sink(self, mac=None):
         mac = self._norm_mac(
             mac if mac is not None else (config.get().get("bluetooth") or {}).get("bt_speaker")
         )
-        if not mac:
-            return ""
-        key = mac.replace(":", "_")
+        key = mac.replace(":", "_") if mac else ""
         for sink in self._pulse_sinks():
             name = (sink.get("name") or "").upper()
             props = " ".join(
                 str(v) for v in (sink.get("properties") or {}).values()
             ).upper()
-            if key in name or key in props:
+            if key and (key in name or key in props):
+                return sink.get("name")
+        for sink in self._pulse_sinks():
+            if "BLUEZ_OUTPUT" in (sink.get("name") or "").upper():
                 return sink.get("name")
         return ""
+
+    def _adopt_sink(self, sink):
+        m = re.match(r"bluez_output\.([0-9A-Fa-f:_-]+?)(?:\.[0-9A-Fa-f]+)?$", sink or "")
+        if not m:
+            return ""
+        mac = self._norm_mac(m.group(1))
+        name = ""
+        for s in self._pulse_sinks():
+            if (s.get("name") or "") == sink:
+                name = (s.get("properties") or {}).get("device.description") or ""
+                break
+        if not name:
+            info = self._btctl(["info", mac], timeout=15)
+            name = self._parse_field(info, "Alias") or mac
+        cfg = dict(config.get().get("bluetooth") or {})
+        if mac:
+            cfg["bt_speaker"] = mac
+            cfg["bt_speaker_name"] = name
+        config.update({"bluetooth": cfg})
+        return mac
 
     def set_mode(self, mode):
         mode = "connect" if mode == "connect" else "speaker"
@@ -657,7 +678,10 @@ class Bluetooth:
         set_volume(pct)
 
     def output_alsa_device(self):
-        if self._bt_sink():
+        sink = self._bt_sink()
+        if sink:
+            if self._default_sink() != sink:
+                self._set_default_sink(sink)
             return "pulse"
         card = _jack_card()
         return "plughw:{},0".format(card) if card is not None else "default"
@@ -794,6 +818,9 @@ class Bluetooth:
             cfg = config.get().get("bluetooth") or {}
             mac = self._norm_mac(cfg.get("bt_speaker"))
             sink = self._bt_sink()
+            if sink and not mac:
+                mac = self._adopt_sink(sink)
+                cfg = config.get().get("bluetooth") or {}
             return {
                 "powered": "Powered: yes" in show,
                 "pairable": "Pairable: yes" in show,

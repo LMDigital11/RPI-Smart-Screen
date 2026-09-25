@@ -550,41 +550,63 @@ class Bluetooth:
                 return self.status()
 
         was_paired = "Paired: yes" in info
-        cmds = ["agent on", "default-agent"]
-        if not was_paired and pair:
-            cmds.append("pairable on")
-            cmds.append("pair " + mac)
-        cmds.append("trust " + mac)
-        cmds.append("connect " + mac)
-        out = self._btctl_session(cmds, timeout=75)
-        blob = (out or "").lower()
-        if "failed to pair" in blob:
-            self._last_bt_error = (
-                "Pairing failed — put the speaker in pairing mode and try again"
-            )
-        elif "failed to connect" in blob:
-            self._last_bt_error = "Couldn't connect to the speaker"
+        already = "Connected: yes" in info
+        if not already:
+            cmds = ["agent on", "default-agent"]
+            if not was_paired and pair:
+                cmds.append("pairable on")
+                cmds.append("pair " + mac)
+            cmds.append("trust " + mac)
+            cmds.append("connect " + mac)
+            out = self._btctl_session(cmds, timeout=60)
+            blob = (out or "").lower()
+            if "failed to pair" in blob:
+                self._last_bt_error = (
+                    "Pairing failed — put the speaker in pairing mode and try again"
+                )
+                return self.status()
+            if "failed to connect" in blob:
+                self._last_bt_error = "Couldn't connect to the speaker"
+                return self.status()
 
         sink = ""
-        alias = ""
-        for _ in range(25):
+        alias = self._parse_field(info, "Alias")
+        link_up = already
+        for _ in range(30):
             time.sleep(1)
             info = self._btctl(["info", mac], timeout=15)
             if "Connected: yes" not in info:
                 continue
+            link_up = True
+            alias = self._parse_field(info, "Alias") or alias
             sink = self._bt_sink(mac)
-            alias = self._parse_field(info, "Alias")
             if sink:
                 break
+        if link_up and not sink:
+            for _ in range(10):
+                time.sleep(1)
+                sink = self._bt_sink(mac)
+                if sink:
+                    break
         if not sink:
-            if not self._last_bt_error:
-                self._last_bt_error = "Connected but no audio output appeared yet"
+            if not link_up:
+                self._last_bt_error = (
+                    "The Bluetooth link to the speaker didn't come up — try again in a moment"
+                )
+            else:
+                self._last_bt_error = (
+                    "Speaker is connected but no Bluetooth audio output appeared — "
+                    + self._server_advice(self._collect_diag(mac))
+                )
             return self.status()
         name = (name or alias or mac)
         prev = self._default_sink()
         if prev and prev != sink:
             self._last_default_sink = prev
         self._set_default_sink(sink)
+        if self._default_sink() != sink:
+            time.sleep(1)
+            self._set_default_sink(sink)
         cfg = dict(config.get().get("bluetooth") or {})
         cfg["mode"] = "connect"
         cfg["bt_speaker"] = mac
@@ -639,6 +661,106 @@ class Bluetooth:
             return "pulse"
         card = _jack_card()
         return "plughw:{},0".format(card) if card is not None else "default"
+
+    def _collect_diag(self, mac=""):
+        mac = self._norm_mac(mac)
+        info = {}
+        show = self._btctl(["show"], timeout=15)
+        info["adapter"] = show
+        info["powered"] = "Powered: yes" in show
+        info["discovering"] = bool(
+            re.search(r"(discover|scann)ing:\s*yes", show, re.I)
+        )
+        server = ""
+        try:
+            pinfo = subprocess.run(
+                ["pactl", "info"], capture_output=True, text=True, timeout=10
+            ).stdout
+            for line in pinfo.splitlines():
+                if line.strip().startswith("Server Name:"):
+                    server = line.split(":", 1)[1].strip()
+                    break
+        except Exception:
+            pass
+        info["server"] = server
+        info["sinks"] = [s.get("name") or "" for s in self._pulse_sinks()]
+        sources = []
+        try:
+            raw = subprocess.run(
+                ["pactl", "-f", "json", "list", "sources"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            ).stdout
+            sources = json.loads(raw or "[]")
+        except Exception:
+            pass
+        info["sources"] = [s.get("name") or "" for s in sources]
+        info["device"] = ""
+        if mac:
+            info["device"] = self._btctl(["info", mac], timeout=20)
+        info["verdict"] = self._verdict(info, mac)
+        return info
+
+    @staticmethod
+    def _verdict(info, mac):
+        lines = []
+        dev = (info.get("device") or "").lower()
+        server = (info.get("server") or "").lower()
+        sinks = info.get("sinks") or []
+        sources = info.get("sources") or []
+        bluez_out = [n for n in sinks if "bluez" in n.lower()]
+        bluez_in = [n for n in sources if "bluez" in n.lower()]
+        connected = "connected: yes" in dev
+        paired = "paired: yes" in dev
+        if not info.get("powered"):
+            lines.append("Bluetooth adapter is powered off")
+        if connected:
+            lines.append("Bluetooth link to " + mac + " is up")
+        else:
+            lines.append(
+                ("paired device " if paired else "device ") + mac + " is not connected"
+            )
+        if bluez_out:
+            lines.append("Audio output available: " + ", ".join(bluez_out))
+        elif connected:
+            if bluez_in:
+                lines.append(
+                    "Only a hands-free (HFP) audio input exists — the speaker connected in headset mode; the Pi can't send music to it"
+                )
+            else:
+                lines.append("No Bluetooth audio sink appeared — the A2DP music profile did not load")
+                if "pipewire" in server:
+                    lines.append("Audio server is PipeWire — check the Bluetooth SPA plugin (libspa-0.2-bluetooth) and that pipewire-pulse is running")
+                elif "pulseaudio" in server:
+                    lines.append("Audio server is PulseAudio — check the Bluetooth module (pulseaudio-module-bluetooth)")
+                else:
+                    lines.append("Audio server could not be detected")
+        else:
+            lines.append("No audio connection yet")
+        return lines
+
+    @staticmethod
+    def _server_advice(info):
+        server = (info.get("server") or "").lower()
+        if "pipewire" in server:
+            return "the A2DP music profile didn't load (audio server is PipeWire — check the Bluetooth SPA plugin and that pipewire-pulse is running)"
+        if "pulseaudio" in server:
+            return "the A2DP music profile didn't load (audio server is PulseAudio — check the Bluetooth module)"
+        return "the A2DP music profile didn't load (audio server could not be detected)"
+
+    def diagnose(self, mac=""):
+        d = self._collect_diag(mac)
+        return {
+            "mac": self._norm_mac(mac),
+            "powered": d["powered"],
+            "discovering": d["discovering"],
+            "server": d["server"],
+            "sinks": d["sinks"],
+            "sources": d["sources"],
+            "device": (d.get("device") or "").strip(),
+            "verdict": d["verdict"],
+        }
 
     def status(self):
         try:

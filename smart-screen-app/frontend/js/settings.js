@@ -129,6 +129,7 @@ const Settings = {
                 this.note("From your phone's Bluetooth menu, pair with this device — music then plays through the selected audio output."),
               ].join("")) + "</div>",
           this.button("Restart Bluetooth adapter", "block", "bt_restart"),
+          this.button("Diagnose Bluetooth", "block", "bt_diag"),
           this.button("Check status", "block", "bt_status"),
         ],
       },
@@ -607,6 +608,21 @@ const Settings = {
             statusEl.textContent = st && st.powered ? "Bluetooth restarted — scan again" : "Bluetooth is powered off";
           }
         }).catch(() => { if (statusEl) { statusEl.className = "test-result bad"; statusEl.textContent = "Restart failed"; } });
+        break;
+      }
+      case "bt_diag": {
+        const statusEl = document.getElementById("bt-connect-status");
+        const mac = ((this.cfg && this.cfg.bluetooth) || {}).bt_speaker || "";
+        if (statusEl) { statusEl.className = "test-result"; statusEl.textContent = "Checking…"; }
+        apiGet("/api/bluetooth/diag?mac=" + encodeURIComponent(mac)).then((d) => {
+          if (!statusEl) return;
+          const hasOut = d && d.sinks && d.sinks.some((s) => s.toLowerCase().indexOf("bluez") >= 0);
+          statusEl.className = "test-result " + (hasOut ? "ok" : "bad");
+          const bits = [];
+          if (d && d.verdict && d.verdict.length) bits.push(d.verdict.join(" · "));
+          if (d && d.server) bits.push("audio: " + d.server);
+          statusEl.textContent = bits.join(" | ") || "No info";
+        }).catch(() => { if (statusEl) { statusEl.className = "test-result bad"; statusEl.textContent = "Diagnose failed"; } });
         break;
       }
       case "test_music": {

@@ -266,6 +266,12 @@ def api_bluetooth():
     return bluetooth_status_service.status()
 
 
+@app.get("/api/bluetooth/diag")
+def api_bluetooth_diag():
+    mac = flask.request.args.get("mac", "")
+    return bluetooth_status_service.diagnose(mac)
+
+
 @app.post("/api/bluetooth/discoverable")
 def api_bluetooth_discoverable():
     data = flask.request.get_json(silent=True) or {}

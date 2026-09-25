@@ -3,6 +3,23 @@ import random
 import threading
 import time
 
+
+def _ensure_user_runtime_dir():
+    try:
+        uid = os.getuid()
+    except Exception:
+        return
+    if os.environ.get("XDG_RUNTIME_DIR"):
+        return
+    for base in ("/run/user", "/var/run/user"):
+        d = os.path.join(base, str(uid))
+        if os.path.isdir(d):
+            os.environ["XDG_RUNTIME_DIR"] = d
+            break
+
+
+_ensure_user_runtime_dir()
+
 import flask
 
 from config import config

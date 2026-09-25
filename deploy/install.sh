@@ -144,6 +144,7 @@ Restart=always
 RestartSec=3
 User=$BOOT_USER
 Environment=SMART_SCREEN_CONFIG=/etc/smart-screen/config.json
+Environment=XDG_RUNTIME_DIR=/run/user/%U
 StandardOutput=journal
 StandardError=journal
 
@@ -167,6 +168,7 @@ Environment=DISPLAY=:0
 Environment=XAUTHORITY=/home/$BOOT_USER/.Xauthority
 Environment=GDK_BACKEND=x11
 Environment=WEBKIT_DISABLE_DMABUF_RENDERER=1
+Environment=XDG_RUNTIME_DIR=/run/user/%U
 ExecStart=/usr/bin/python3 $DEST/kiosk/webkit_kiosk.py
 Restart=always
 RestartSec=5

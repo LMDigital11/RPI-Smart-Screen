@@ -11,6 +11,7 @@ Restart=always
 RestartSec=3
 User=pi
 Environment=SMART_SCREEN_CONFIG=/etc/smart-screen/config.json
+Environment=XDG_RUNTIME_DIR=/run/user/%U
 StandardOutput=journal
 StandardError=journal
 

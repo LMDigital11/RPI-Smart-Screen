@@ -128,6 +128,7 @@ const Settings = {
                 this.textField("bluetooth.speaker_name", "Speaker name", s.bluetooth.speaker_name),
                 this.note("From your phone's Bluetooth menu, pair with this device — music then plays through the selected audio output."),
               ].join("")) + "</div>",
+          this.button("Restart Bluetooth adapter", "block", "bt_restart"),
           this.button("Check status", "block", "bt_status"),
         ],
       },
@@ -219,6 +220,9 @@ const Settings = {
     content.innerHTML = "";
     if (sec.heading) content.insertAdjacentHTML("beforeend", "<h3>" + sec.heading + "</h3>");
     content.insertAdjacentHTML("beforeend", sec.render().join(""));
+    const sBody = document.getElementById("settings-body");
+    if (sBody) sBody.scrollTop = 0;
+    content.scrollTop = 0;
     this.wire(content);
     if (id === "update") {
       apiGet("/api/update/status").then((r) => {
@@ -272,7 +276,10 @@ const Settings = {
             toast(st && st.mode === "connect"
               ? "Now streaming to a Bluetooth speaker — scan above and connect one"
               : "Pi is a Bluetooth speaker again");
-            Settings.openSection("bluetooth");
+            loadConfig().then((cfg) => {
+              this.cfg = cfg;
+              Settings.openSection("bluetooth");
+            });
           });
           return;
         }
@@ -589,6 +596,17 @@ const Settings = {
         apiPost("/api/bluetooth/disconnect").then((st) => {
           if (statusEl) { statusEl.className = "test-result ok"; statusEl.textContent = "Disconnected — audio back to the audio jack (AUX)."; }
         });
+        break;
+      }
+      case "bt_restart": {
+        const statusEl = document.getElementById("bt-connect-status");
+        if (statusEl) { statusEl.className = "test-result"; statusEl.textContent = "Restarting Bluetooth adapter…"; }
+        apiPost("/api/bluetooth/restart").then((st) => {
+          if (statusEl) {
+            statusEl.className = "test-result " + (st && st.powered ? "ok" : "bad");
+            statusEl.textContent = st && st.powered ? "Bluetooth restarted — scan again" : "Bluetooth is powered off";
+          }
+        }).catch(() => { if (statusEl) { statusEl.className = "test-result bad"; statusEl.textContent = "Restart failed"; } });
         break;
       }
       case "test_music": {

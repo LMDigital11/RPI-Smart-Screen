@@ -282,11 +282,14 @@ def api_bluetooth_mode():
 @app.post("/api/bluetooth/scan")
 def api_bluetooth_scan():
     data = flask.request.get_json(silent=True) or {}
-    return {
-        "devices": bluetooth_status_service.scan(
-            duration=int(data.get("duration", 12))
-        )
-    }
+    return bluetooth_status_service.scan(
+        duration=int(data.get("duration", 12))
+    )
+
+
+@app.post("/api/bluetooth/restart")
+def api_bluetooth_restart():
+    return bluetooth_status_service.restart_adapter()
 
 
 @app.post("/api/bluetooth/connect")

@@ -346,10 +346,15 @@ class Bluetooth:
         self._last_bt_error = ""
         self._btctl(["scan", "off"])
         self.power_on()
+        show = self._btctl(["show"])
+        if re.search(r"(discover|scann)ing:\s*yes", show, re.I):
+            self._btctl(["scan", "off"])
+            time.sleep(2)
         dur = max(4, min(int(duration or 12), 30))
         found = {}
-        scan_error = ""
-        discovery_started = False
+        fail_reason = ""
+        ack = False
+        new_seen = False
         try:
             proc = subprocess.Popen(
                 ["bluetoothctl"],
@@ -368,33 +373,45 @@ class Bluetooth:
         )
 
         def reader():
-            nonlocal scan_error, discovery_started
+            nonlocal fail_reason, new_seen
             try:
                 for line in proc.stdout:
                     out.append(line)
                     low = line.lower()
                     if "failed to start discovery" in low:
-                        scan_error = "Bluetooth discovery failed to start"
-                    if "discovery started" in low:
-                        discovery_started = True
+                        fail_reason = (
+                            line.split(":", 1)[1] if ":" in line else ""
+                        ).strip() or "failed to start"
+                    if line.strip().startswith("[NEW]"):
+                        new_seen = True
                     m = dev_re.match(line.strip())
                     if m:
                         found.setdefault(m.group(1).upper(), (m.group(2) or "").strip())
             except Exception:
                 pass
 
+        def scanning():
+            s = self._btctl(["show"])
+            return bool(re.search(r"(discover|scann)ing:\s*yes", s, re.I))
+
         rt = threading.Thread(target=reader, daemon=True)
         rt.start()
         try:
             proc.stdin.write("scan on\n")
             proc.stdin.flush()
-            time.sleep(2)
-            if not discovery_started and not scan_error:
+            time.sleep(2.5)
+            ack = scanning()
+            if not ack and not fail_reason:
                 try:
-                    proc.stdin.write("scan on\n")
+                    proc.stdin.write("scan off\n")
                     proc.stdin.flush()
                 except Exception:
                     pass
+                time.sleep(1.5)
+                proc.stdin.write("scan on\n")
+                proc.stdin.flush()
+                time.sleep(2.5)
+                ack = scanning()
             deadline = time.time() + dur
             while time.time() < deadline:
                 time.sleep(1)
@@ -431,8 +448,25 @@ class Bluetooth:
             m = dev_re.match(line.strip())
             if m:
                 found.setdefault(m.group(1).upper(), (m.group(2) or "").strip())
-        if not scan_error and not discovery_started:
-            scan_error = "Bluetooth discovery didn't start — check the adapter"
+
+        error = ""
+        if fail_reason and any(
+            k in fail_reason.lower() for k in ("inprogress", "rejected", "busy")
+        ):
+            error = (
+                "Bluetooth discovery was blocked — a previous scan may be stuck. "
+                "Tap 'Restart Bluetooth adapter' and scan again."
+            )
+        elif fail_reason:
+            error = (
+                "Bluetooth discovery failed to start (" + fail_reason + "). "
+                "Tap 'Restart Bluetooth adapter' and scan again."
+            )
+        elif not ack and not new_seen and not found:
+            error = (
+                "Bluetooth discovery didn't start — tap 'Restart Bluetooth adapter' "
+                "and scan again."
+            )
 
         devices = []
         for mac, name in found.items():
@@ -447,9 +481,29 @@ class Bluetooth:
                 }
             )
         devices.sort(key=lambda d: (not d["paired"], d["name"].lower()))
-        if scan_error:
-            self._last_bt_error = scan_error
-        return {"devices": devices, "error": scan_error}
+        if error:
+            self._last_bt_error = error
+        return {"devices": devices, "error": error, "ack": ack}
+
+    def restart_adapter(self):
+        try:
+            subprocess.run(
+                ["bluetoothctl", "power", "off"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            time.sleep(2)
+            self.power_on()
+            self._btctl(["pairable", "on"])
+            cfg = config.get().get("bluetooth") or {}
+            if cfg.get("mode") != "connect":
+                self.set_discoverable(bool(cfg.get("discoverable", True)))
+            self._btctl(["scan", "off"])
+        except Exception:
+            pass
+        self._last_bt_error = ""
+        return self.status()
 
     @staticmethod
     def _parse_field(info, field):

@@ -64,6 +64,8 @@ const Music = {
   async open() {
     this.isOpen = true;
     document.getElementById("screen-music").classList.add("active");
+    const mb = document.getElementById("music-body");
+    if (mb) mb.scrollTop = 0;
     App.captureIdle?.(true);
     await this.loadAlbums();
     this.renderAlbums();
@@ -129,10 +131,14 @@ const Music = {
       grid.appendChild(card);
     });
     view.appendChild(grid);
+    const mb = document.getElementById("music-body");
+    if (mb) mb.scrollTop = 0;
   },
 
   showTracks(album) {
     const view = document.getElementById("music-view");
+    const mb = document.getElementById("music-body");
+    if (mb) mb.scrollTop = 0;
     view.innerHTML = "";
     const head = document.createElement("div");
     head.className = "music-subhead";
